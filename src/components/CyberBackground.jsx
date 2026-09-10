@@ -35,11 +35,11 @@ export default function CyberBackground() {
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Deep technical command-center gradient
+      // Modern high-visibility command-center steel navy gradient
       const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bgGrad.addColorStop(0, '#0a1428');   // Clean deep navy
-      bgGrad.addColorStop(0.5, '#0f1d38'); // Aerospace blue
-      bgGrad.addColorStop(1, '#091224');   // Crisp dark slate
+      bgGrad.addColorStop(0, '#0c1d38');   // Rich clean command navy
+      bgGrad.addColorStop(0.5, '#14294e'); // Modern steel aerospace blue
+      bgGrad.addColorStop(1, '#0f223f');   // Sleek slate navy
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 

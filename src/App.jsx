@@ -5,7 +5,8 @@ import SpatialMineGrid from './components/SpatialMineGrid';
 import TelemetryPanels from './components/TelemetryPanels';
 import SimulationControls from './components/SimulationControls';
 import EventLog from './components/EventLog';
-import NodeLiveInspector from './components/NodeLiveInspector';
+import Earth3DExplorer from './components/Earth3DExplorer';
+import SensorDeepDiveHub from './components/SensorDeepDiveHub';
 import DgmsReportModal from './components/DgmsReportModal';
 
 // Dedicated Sensor & Analytics Sections
@@ -35,7 +36,8 @@ import {
   Settings, 
   Cpu,
   Sparkles,
-  Gauge
+  Gauge,
+  Globe
 } from 'lucide-react';
 
 import { 
@@ -287,13 +289,14 @@ export default function App() {
 
   const navTabs = [
     { id: 'overview', label: 'Command Overview', icon: LayoutDashboard },
+    { id: 'earth3d', label: '3D Earth & Subsidence Depth', icon: Globe },
+    { id: 'sensorhub', label: 'Sensor Deep-Dive & Health', icon: Cpu },
     { id: 'temperature', label: 'Temperature & Heat', icon: Thermometer },
-    { id: 'moisture', label: 'Moisture & Water', icon: Droplets },
-    { id: 'vibration', label: 'Seismic Vibration', icon: Activity },
-    { id: 'cracks', label: 'Strata Cracks', icon: Ruler },
-    { id: 'gas', label: 'Gas Safety', icon: Wind },
-    { id: 'sensor3d', label: '3D Hardware Twin', icon: Cpu },
-    { id: 'diagnostics', label: 'Sensors Check', icon: Gauge },
+    { id: 'moisture', label: 'Moisture & Water Sump', icon: Droplets },
+    { id: 'vibration', label: 'Seismic Vibration & Waves', icon: Activity },
+    { id: 'cracks', label: 'Strata Fissures & Cracks', icon: Ruler },
+    { id: 'gas', label: 'Gas Safety (CH4/CO)', icon: Wind },
+    { id: 'sensor3d', label: '3D Hardware Twin', icon: Gauge },
     { id: 'locations', label: 'Sensor Locations', icon: MapPin },
     { id: 'cameras', label: 'Surveillance & Fog CAMs', icon: Camera },
     { id: 'innovation', label: 'Why Green ThinkerX Wins', icon: Sparkles },
@@ -367,8 +370,7 @@ export default function App() {
                   nodes={nodes}
                   onSelectNode={(node) => {
                     setSelectedNode(node);
-                    const el = document.getElementById('node-inspector-section');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    setActiveTab('sensorhub');
                   }}
                   selectedNodeId={selectedNode ? selectedNode.id : nodes[0]?.id}
                 />
@@ -380,18 +382,6 @@ export default function App() {
                   status={overallStatus}
                 />
               </div>
-            </div>
-
-            {/* Real-Time Node-Level 360° Environmental Recon & Telemetry Hub */}
-            <div id="node-inspector-section">
-              <NodeLiveInspector
-                node={selectedNode || nodes[0]}
-                allNodes={nodes}
-                onSelectNodeId={(id) => {
-                  const target = nodes.find(n => n.id === id);
-                  if (target) setSelectedNode(target);
-                }}
-              />
             </div>
 
             {/* Middle Row: 3D Geological Strata Model */}
@@ -418,6 +408,24 @@ export default function App() {
             </div>
 
           </div>
+        )}
+
+        {/* TAB 2: 3D SUBTERRANEAN EARTH & SUBSIDENCE DEPTH */}
+        {activeTab === 'earth3d' && (
+          <Earth3DExplorer />
+        )}
+
+        {/* TAB 3: DEDICATED SENSOR DEEP-DIVE & HEALTH HUB */}
+        {activeTab === 'sensorhub' && (
+          <SensorDeepDiveHub
+            selectedNode={selectedNode || nodes[0]}
+            allNodes={nodes}
+            onSelectNodeId={(id) => {
+              const target = nodes.find(n => n.id === id);
+              if (target) setSelectedNode(target);
+            }}
+            onBackToOverview={() => setActiveTab('overview')}
+          />
         )}
 
         {/* TAB 2: TEMPERATURE */}
@@ -479,11 +487,7 @@ export default function App() {
             nodes={nodes}
             onSelectNode={(node) => {
               setSelectedNode(node);
-              setActiveTab('overview');
-              setTimeout(() => {
-                const el = document.getElementById('node-inspector-section');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }, 80);
+              setActiveTab('sensorhub');
             }}
           />
         )}

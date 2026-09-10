@@ -52,7 +52,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
       const isAdvisory = peakG >= DGMS_THRESHOLDS.VIBRATION_ADVISORY;
       
       ctx.strokeStyle = isCritical ? '#ef4444' : isAdvisory ? '#f59e0b' : '#38bdf8';
-      ctx.lineWidth = isCritical ? 3.5 : 2;
+      ctx.lineWidth = isCritical ? 3.5 : 2.5;
       ctx.shadowColor = isCritical ? 'rgba(239, 68, 68, 0.8)' : 'rgba(56, 189, 248, 0.6)';
       ctx.shadowBlur = 10;
 
@@ -71,7 +71,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      phase += isCritical ? 0.22 : isAdvisory ? 0.12 : 0.05;
+      phase += isCritical ? 0.18 : 0.06;
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -81,41 +81,46 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
 
   function handleTriggerTestTremor() {
     setTremorBurst(true);
-    if (onInjectTremor) onInjectTremor(activeNodeId, 0.72);
+    if (onInjectTremor) {
+      onInjectTremor(activeNodeId, 0.72);
+    }
     setTimeout(() => {
       setTremorBurst(false);
-      if (onInjectTremor) onInjectTremor(activeNodeId, 0.06);
-    }, 4000);
+      if (onInjectTremor) {
+        onInjectTremor(activeNodeId, 0.06);
+      }
+    }, 4500);
   }
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-6 animate-fade-in text-white">
       
-      {/* Header Banner */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-blue-950 text-blue-400 border border-blue-500/30">
-            <Activity className="w-6 h-6 animate-pulse" />
+      {/* Header Banner - High Contrast */}
+      <div className="bg-[#18253f] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
+        <div className="flex items-center gap-4">
+          <div className="p-4 rounded-2xl bg-cyan-500/30 text-cyan-300 border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
+            <Activity className="w-10 h-10 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-white tracking-wider flex items-center gap-2">
-              SEISMIC VIBRATION & ROOF STRATA MICRO-TREMOR MONITOR
-              <span className="text-[10px] bg-blue-950 text-blue-400 border border-blue-500/40 px-2 py-0.5 rounded font-mono">
-                DGMS TECH REF 2021
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex items-center gap-3">
+              SEISMIC MICRO-TREMOR & 3-AXIS VIBRATION MONITOR
+              <span className="text-xs bg-cyan-500 text-slate-950 font-black px-3 py-1 rounded-full uppercase">
+                60 FPS LIVE STREAM
               </span>
             </h2>
-            <p className="text-xs text-slate-400">
-              High-Frequency Piezoelectric Geophone & 3-Axis Accelerometer (MPU6050) Strata Waveform
+            <p className="text-base text-slate-100 font-bold mt-1">
+              Triaxial MEMS accelerometer telemetry • Detects micro-fracturing acoustic emissions prior to dynamic rock bursts
             </p>
           </div>
         </div>
 
-        {/* Node selector & Test button */}
-        <div className="flex items-center gap-3">
+        {/* Station select & inject button */}
+        <div className="flex items-center gap-3 bg-[#0d1627] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
+          <span className="text-sm text-white font-black">Station:</span>
           <select
             value={activeNodeId}
             onChange={(e) => setActiveNodeId(e.target.value)}
-            className="bg-slate-950 text-cyan-400 font-mono text-xs font-bold border border-slate-700 px-3 py-2 rounded-xl outline-none cursor-pointer"
+            className="bg-[#16233d] text-cyan-300 font-mono text-sm font-black border border-cyan-500/50 px-4 py-2 rounded-xl outline-none cursor-pointer shadow-md"
           >
             {nodes.map(n => (
               <option key={n.id} value={n.id}>{n.id} - {n.name}</option>
@@ -124,120 +129,124 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
 
           <button
             onClick={handleTriggerTestTremor}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs shadow-lg transition-all cursor-pointer ${
               tremorBurst
                 ? 'bg-red-600 text-white animate-bounce'
                 : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white'
             }`}
           >
             <Zap className="w-4 h-4" />
-            <span>{tremorBurst ? 'BURST ACTIVE (0.72g)!' : 'Simulate Micro-Tremor'}</span>
+            <span>{tremorBurst ? 'BURST ACTIVE (0.72g)!' : 'Test Micro-Tremor'}</span>
           </button>
         </div>
       </div>
 
       {/* Main Grid: Oscilloscope + Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left: 60 FPS Real-time Oscilloscope (8 cols) */}
-        <div className="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-300 font-mono flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping inline-block"></span>
-              LIVE SEISMIC ACCELEROMETER OSCILLOSCOPE (60 FPS)
-            </span>
-            <span className="text-[10px] text-slate-500 font-mono">Sampling: 1000 Hz • Sub-GHz LoRa</span>
+        {/* Left: 60 FPS Real-time Oscilloscope (7 cols) */}
+        <div className="lg:col-span-7 bg-[#182642] border border-slate-700 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-black text-white font-mono flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-cyan-400 animate-ping inline-block"></span>
+                LIVE SEISMIC ACCELEROMETER OSCILLOSCOPE (60 FPS)
+              </span>
+              <span className="text-xs text-cyan-300 font-mono font-bold bg-[#0b1424] px-3 py-1 rounded-xl border border-cyan-500/30">
+                Sampling: 1000 Hz • Sub-GHz LoRa
+              </span>
+            </div>
+
+            <div className="relative h-72 bg-[#091120] rounded-2xl border border-slate-700 overflow-hidden shadow-inner p-1">
+              <canvas
+                ref={canvasRef}
+                width={720}
+                height={280}
+                className="w-full h-full block"
+              />
+              <div className="absolute top-3 left-4 font-mono text-xs text-cyan-300 font-bold bg-black/80 px-3 py-1.5 rounded-xl border border-slate-700">
+                Channel: Resultant Peak Acceleration Vector
+              </div>
+              <div className="absolute bottom-3 right-4 font-mono text-xs text-white font-bold bg-black/80 px-3 py-1.5 rounded-xl border border-slate-700">
+                Advisory: &gt;0.30g | Critical: &gt;0.65g
+              </div>
+            </div>
           </div>
 
-          <div className="relative flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center p-1 min-h-[260px]">
-            <canvas
-              ref={canvasRef}
-              width={720}
-              height={260}
-              className="w-full h-full block"
-            />
-            <div className="absolute top-2 left-3 font-mono text-[10px] text-cyan-400/80 bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
-              Channel: Triaxial Accel Vector (g)
+          <div className="mt-5 grid grid-cols-3 gap-3 text-center text-xs font-mono">
+            <div className="bg-[#0e172a] p-3 rounded-xl border border-slate-700">
+              <span className="text-slate-300 text-xs font-bold block">X-Axis (Dip)</span>
+              <span className="text-lg font-black text-cyan-300">{(peakG * 0.7).toFixed(3)} g</span>
             </div>
-            <div className="absolute bottom-2 right-3 font-mono text-[10px] text-slate-400 bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
-              Thresholds: Advisory &gt;0.30g | Critical &gt;0.65g
+            <div className="bg-[#0e172a] p-3 rounded-xl border border-slate-700">
+              <span className="text-slate-300 text-xs font-bold block">Y-Axis (Strike)</span>
+              <span className="text-lg font-black text-blue-300">{(peakG * 0.5).toFixed(3)} g</span>
+            </div>
+            <div className="bg-[#0e172a] p-3 rounded-xl border border-slate-700">
+              <span className="text-slate-300 text-xs font-bold block">Z-Axis (Sag)</span>
+              <span className="text-lg font-black text-purple-300">{(peakG * 0.9).toFixed(3)} g</span>
             </div>
           </div>
         </div>
 
-        {/* Right: Key Vibration Metrics Cards (4 cols) */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
+        {/* Right: Peak Gauge & Scientific Wave Model (5 cols) */}
+        <div className="lg:col-span-5 flex flex-col gap-5">
           
           {/* Peak Acceleration Gauge Card */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1">
+          <div className="bg-[#182642] border border-slate-700 rounded-3xl p-6 shadow-xl">
+            <span className="text-xs text-slate-300 font-black uppercase tracking-wider block mb-2 font-mono">
               Peak Resultant Acceleration
             </span>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-4xl font-black font-mono ${
-                peakG >= 0.65 ? 'text-red-400 animate-pulse' : peakG >= 0.30 ? 'text-amber-400' : 'text-cyan-400'
+            <div className="flex items-baseline gap-3">
+              <span className={`text-5xl font-black font-mono ${
+                peakG >= 0.65 ? 'text-red-400 animate-pulse' : peakG >= 0.30 ? 'text-amber-300' : 'text-cyan-300'
               }`}>
                 {peakG.toFixed(3)}
               </span>
-              <span className="text-sm font-bold text-slate-400">g-force</span>
+              <span className="text-xl font-black text-white">g-force</span>
             </div>
-            <div className="mt-2 text-xs">
+            
+            <div className="mt-4 text-sm font-black">
               {peakG >= 0.65 ? (
-                <span className="text-red-400 font-bold bg-red-950/60 border border-red-500/40 px-2 py-0.5 rounded flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> DYNAMIC ROCK-BURST RISK
-                </span>
+                <div className="text-white bg-red-950 border-2 border-red-500 p-3.5 rounded-2xl flex items-center gap-2 shadow-lg">
+                  <AlertTriangle className="w-5 h-5 text-red-300 animate-pulse shrink-0" />
+                  <span>CRITICAL ALERT: Dynamic Rock Burst / Roof Rupture Hazard!</span>
+                </div>
               ) : peakG >= 0.30 ? (
-                <span className="text-amber-400 font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> STRATA MICRO-FRACTURING
-                </span>
+                <div className="text-white bg-amber-950 border-2 border-amber-500 p-3.5 rounded-2xl flex items-center gap-2 shadow-lg">
+                  <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />
+                  <span>ADVISORY: Strata Micro-Fracturing Acoustic Emission Detected</span>
+                </div>
               ) : (
-                <span className="text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> NORMAL AMBIENT STRATA
-                </span>
+                <div className="text-white bg-emerald-950 border-2 border-emerald-500 p-3.5 rounded-2xl flex items-center gap-2 shadow-lg">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>STATUTORY SAFE: Ambient Background Micro-Seismic Activity Normal</span>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Tri-Axial Breakdown Card */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-              Triaxial Motion Vectors
-            </span>
-
-            <div className="space-y-1.5 font-mono text-xs">
-              <div>
-                <div className="flex justify-between text-slate-300 text-[11px] mb-0.5">
-                  <span>X-Axis (Dip Horizontal):</span>
-                  <span className="font-bold text-cyan-400">{(peakG * 0.7).toFixed(3)} g</span>
-                </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                  <div className="bg-cyan-400 h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (peakG / 0.8) * 100)}%` }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-slate-300 text-[11px] mb-0.5">
-                  <span>Y-Axis (Strike Horizontal):</span>
-                  <span className="font-bold text-blue-400">{(peakG * 0.5).toFixed(3)} g</span>
-                </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                  <div className="bg-blue-400 h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (peakG * 0.7 / 0.8) * 100)}%` }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-slate-300 text-[11px] mb-0.5">
-                  <span>Z-Axis (Vertical Roof Sag):</span>
-                  <span className="font-bold text-purple-400">{(peakG * 0.9).toFixed(3)} g</span>
-                </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                  <div className="bg-purple-400 h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (peakG * 0.9 / 0.8) * 100)}%` }}></div>
-                </div>
+          {/* Scientific Seismic Wave Propagation Graphic */}
+          <div className="bg-[#182642] border border-slate-700 rounded-3xl overflow-hidden shadow-xl group flex-1 flex flex-col justify-between">
+            <div className="relative h-52 overflow-hidden bg-black">
+              <img
+                src="./images/seismic_vibration.jpg"
+                alt="Seismic Wave Propagation 3D"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute top-3 left-3 bg-black/85 backdrop-blur border border-cyan-400 px-3 py-1 rounded-xl text-xs font-mono font-black text-cyan-300">
+                P-WAVE & S-WAVE FREQUENCY SPECTRUM
               </div>
             </div>
-
-            <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-400">
-              P-Wave Velocity: <strong className="text-white">3,850 m/s</strong> (Sandstone Roof)
+            
+            <div className="p-4 bg-[#101b30] flex items-center justify-between text-xs font-mono">
+              <div>
+                <strong className="text-white text-sm block">P-Wave Velocity: 3,850 m/s</strong>
+                <span className="text-slate-300 font-sans">Massive Sandstone Overburden • AE Frequency: 14.2 Hz</span>
+              </div>
+              <span className="text-cyan-300 font-bold bg-cyan-950 px-3 py-1.5 rounded-xl border border-cyan-500/40">
+                FFT: REAL-TIME
+              </span>
             </div>
           </div>
 

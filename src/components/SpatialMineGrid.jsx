@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Layers, Compass, Info, Radio, AlertTriangle } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
@@ -192,11 +192,20 @@ export default function SpatialMineGrid({ nodes, onSelectNode, selectedNodeId })
                 onMouseEnter={() => setHoveredNode(node)}
                 onMouseLeave={() => setHoveredNode(null)}
               >
+                {/* Large Transparent Hit Target for Guaranteed Instant Clicks */}
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r="38"
+                  fill="transparent"
+                  className="cursor-pointer"
+                />
+
                 {/* Outer pulsing wave */}
                 <circle
                   cx={node.x}
                   cy={node.y}
-                  r={isCritical ? "24" : "18"}
+                  r={isCritical ? "26" : "20"}
                   fill={ringColor}
                   className={isCritical ? "animate-ping" : "animate-radar-ping"}
                   style={{ transformOrigin: `${node.x}px ${node.y}px` }}
@@ -207,11 +216,11 @@ export default function SpatialMineGrid({ nodes, onSelectNode, selectedNodeId })
                   <circle
                     cx={node.x}
                     cy={node.y}
-                    r="20"
+                    r="24"
                     fill="none"
                     stroke="#38bdf8"
-                    strokeWidth="2"
-                    strokeDasharray="3,3"
+                    strokeWidth="2.5"
+                    strokeDasharray="4,4"
                   />
                 )}
 
@@ -219,30 +228,30 @@ export default function SpatialMineGrid({ nodes, onSelectNode, selectedNodeId })
                 <circle
                   cx={node.x}
                   cy={node.y}
-                  r={isCritical ? "11" : "9"}
+                  r={isCritical ? "13" : "11"}
                   fill={beaconColor}
                   stroke="#ffffff"
-                  strokeWidth="2"
-                  filter="drop-shadow(0px 0px 8px rgba(0,0,0,0.8))"
+                  strokeWidth="2.5"
+                  filter="drop-shadow(0px 0px 8px rgba(0,0,0,0.9))"
                 />
 
                 {/* Node ID Tag Pill */}
                 <rect
-                  x={node.x - 30}
-                  y={node.y - 30}
-                  width="60"
-                  height="16"
-                  rx="4"
-                  fill="#0f172a"
-                  stroke={isSelected ? '#38bdf8' : isCritical ? '#ef4444' : isAdvisory ? '#f59e0b' : '#334155'}
-                  strokeWidth="1.2"
+                  x={node.x - 34}
+                  y={node.y - 34}
+                  width="68"
+                  height="18"
+                  rx="5"
+                  fill="#0b1322"
+                  stroke={isSelected ? '#38bdf8' : isCritical ? '#ef4444' : isAdvisory ? '#f59e0b' : '#475569'}
+                  strokeWidth="1.5"
                 />
                 <text
                   x={node.x}
-                  y={node.y - 19}
-                  fill={isCritical ? '#fca5a5' : isAdvisory ? '#fde68a' : '#e2e8f0'}
-                  fontSize="9"
-                  fontWeight="bold"
+                  y={node.y - 21}
+                  fill="#ffffff"
+                  fontSize="11"
+                  fontWeight="900"
                   textAnchor="middle"
                   fontFamily="monospace"
                 >
@@ -251,21 +260,21 @@ export default function SpatialMineGrid({ nodes, onSelectNode, selectedNodeId })
 
                 {/* Live Telemetry Value Label Below */}
                 <rect
-                  x={node.x - 32}
-                  y={node.y + 14}
-                  width="64"
-                  height="14"
-                  rx="3"
-                  fill="#090d16"
-                  stroke="#1e293b"
-                  strokeWidth="1"
+                  x={node.x - 36}
+                  y={node.y + 15}
+                  width="72"
+                  height="16"
+                  rx="4"
+                  fill="#090e18"
+                  stroke="#334155"
+                  strokeWidth="1.2"
                 />
                 <text
                   x={node.x}
-                  y={node.y + 24}
-                  fill={isCritical ? '#ef4444' : isAdvisory ? '#f59e0b' : '#38bdf8'}
-                  fontSize="8"
-                  fontWeight="bold"
+                  y={node.y + 27}
+                  fill={isCritical ? '#f87171' : isAdvisory ? '#fbbf24' : '#38bdf8'}
+                  fontSize="9.5"
+                  fontWeight="900"
                   textAnchor="middle"
                   fontFamily="monospace"
                 >
