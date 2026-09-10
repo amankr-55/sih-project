@@ -297,6 +297,41 @@ export default function SpatialMineGrid({ nodes, onSelectNode, selectedNodeId })
         </div>
 
       </div>
+
+      {/* Quick Jump Sensor Bar (100% Clickable on Mobile and Desktop) */}
+      <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-black text-cyan-400 font-mono flex items-center gap-1.5">
+          <Layers className="w-4 h-4 text-cyan-400" />
+          SELECT SENSOR FOR COMPLETE DETAILS:
+        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {nodes.map(n => {
+            const isSelected = selectedNodeId === n.id;
+            const isCrit = n.status === 'critical';
+            const isAdv = n.status === 'advisory';
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => onSelectNode(n)}
+                className={`px-3 py-1.5 rounded-xl font-mono text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 shadow-cyan-500/40 scale-105 ring-2 ring-white'
+                    : isCrit
+                    ? 'bg-red-950 text-red-300 border border-red-500 hover:bg-red-900'
+                    : isAdv
+                    ? 'bg-amber-950 text-amber-300 border border-amber-500 hover:bg-amber-900'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:text-white'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${isCrit ? 'bg-red-400 animate-ping' : isAdv ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                <span>{n.id}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   );
 }

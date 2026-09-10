@@ -23,7 +23,6 @@ import InnovationSection from './components/InnovationSection';
 import SettingsSection from './components/SettingsSection';
 import SensorDiagnosticsSection from './components/SensorDiagnosticsSection';
 import CyberBackground from './components/CyberBackground';
-import LoginModal from './components/LoginModal';
 import UserAccessLogSection from './components/UserAccessLogSection';
 
 import { 
@@ -55,18 +54,15 @@ import { generateDGMSReport } from './utils/dgmsReportGenerator';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview'); 
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('geosentinel_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
+  const [currentUser, setCurrentUser] = useState({
+    id: 'USR-CHIEF-01',
+    name: 'Aman Kumar (Chief Officer)',
+    role: 'admin',
+    email: 'Chief Safety Officer'
   });
 
   function handleLogout() {
-    localStorage.removeItem('geosentinel_auth_user');
-    setCurrentUser(null);
+    // Reset to default session
     setActiveTab('overview');
   }
 
@@ -343,11 +339,6 @@ export default function App() {
       overallStatus === 'critical' ? 'ring-8 ring-inset ring-red-600/40' : ''
     }`}>
       
-      {/* First-Time Visitor Login Gate (Strict Gmail & Google Auth) */}
-      {!currentUser && (
-        <LoginModal onLoginSuccess={(userObj) => setCurrentUser(userObj)} />
-      )}
-
       {/* Animated Subterranean Particle Cyber Background */}
       <CyberBackground />
       

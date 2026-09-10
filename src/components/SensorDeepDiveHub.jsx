@@ -389,7 +389,7 @@ export default function SensorDeepDiveHub({
           <div className="bg-[#142036] border border-slate-700 p-5 rounded-3xl shadow-xl flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-black text-white uppercase flex items-center gap-2 font-mono">
-                <Waveform className="w-5 h-5 text-amber-400" />
+                <Activity className="w-5 h-5 text-amber-400" />
                 VIBRATION FREQUENCY SPECTRUM (0 Hz - 50 Hz FFT FLOW)
               </span>
               <span className="text-xs font-mono font-black text-amber-300 bg-amber-950 px-3 py-1 rounded-xl border border-amber-500/40">
