@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   ShieldCheck, 
@@ -10,7 +10,9 @@ import {
   Activity,
   Layers,
   Clock,
-  Sparkles
+  Sparkles,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 
 export default function Header({ 
@@ -21,7 +23,9 @@ export default function Header({
   onToggleSiren, 
   onExportReport,
   currentShift,
-  onChangeShift 
+  onChangeShift,
+  currentUser,
+  onLogout
 }) {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -197,6 +201,39 @@ export default function Header({
             <FileDown className="w-4 h-4" />
             <span>DGMS REPORT (PDF)</span>
           </button>
+
+          {/* User Profile & Sign-Out */}
+          {currentUser && (
+            <div className="flex items-center gap-2.5 bg-slate-900/95 border-2 border-slate-700/90 pl-3 pr-2 py-1.5 rounded-2xl shadow-lg">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs ${
+                currentUser.role === 'admin' 
+                  ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-400/60 shadow-[0_0_10px_rgba(245,158,11,0.5)]' 
+                  : 'bg-cyan-700 text-white'
+              }`}>
+                {currentUser.email.charAt(0).toUpperCase()}
+              </div>
+              <div className="text-left leading-tight hidden sm:block">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
+                  <span>{currentUser.name || currentUser.email.split('@')[0]}</span>
+                  {currentUser.role === 'admin' && (
+                    <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-500/60 px-1.5 py-0.2 rounded font-black">
+                      👑 OWNER
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  {currentUser.role === 'admin' ? 'Master Admin (Aman Kumar)' : 'Mine Inspector'}
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                title="Logout from portal"
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-red-950 text-slate-300 hover:text-red-300 border border-slate-700 hover:border-red-500/60 transition-all cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
         </div>
       </div>

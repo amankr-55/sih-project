@@ -23,6 +23,8 @@ import InnovationSection from './components/InnovationSection';
 import SettingsSection from './components/SettingsSection';
 import SensorDiagnosticsSection from './components/SensorDiagnosticsSection';
 import CyberBackground from './components/CyberBackground';
+import LoginModal from './components/LoginModal';
+import UserAccessLogSection from './components/UserAccessLogSection';
 
 import { 
   LayoutDashboard, 
@@ -34,10 +36,11 @@ import {
   MapPin, 
   Camera, 
   Settings, 
-  Cpu,
-  Sparkles,
-  Gauge,
-  Globe
+  Cpu, 
+  Sparkles, 
+  Gauge, 
+  Globe,
+  Users
 } from 'lucide-react';
 
 import { 
@@ -52,6 +55,21 @@ import { generateDGMSReport } from './utils/dgmsReportGenerator';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview'); 
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('geosentinel_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  function handleLogout() {
+    localStorage.removeItem('geosentinel_auth_user');
+    setCurrentUser(null);
+    setActiveTab('overview');
+  }
+
   const [nodes, setNodes] = useState(INITIAL_NODES);
   const [historyData, setHistoryData] = useState(generateInitialChartHistory());
   const [selectedNode, setSelectedNode] = useState(INITIAL_NODES[0]);
@@ -287,7 +305,10 @@ export default function App() {
     logEvent('normal', 'SYSTEM', `Statutory DGMS Shift Audit Report PDF exported for ${currentShift}.`);
   }
 
-  const navTabs = [
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Base navigation tabs accessible to all verified mine safety inspectors
+  const baseTabs = [
     { id: 'overview', label: 'Command Overview', icon: LayoutDashboard },
     { id: 'earth3d', label: '3D Earth & Subsidence Depth', icon: Globe },
     { id: 'sensorhub', label: 'Sensor Deep-Dive & Health', icon: Cpu },
@@ -300,18 +321,37 @@ export default function App() {
     { id: 'locations', label: 'Sensor Locations', icon: MapPin },
     { id: 'cameras', label: 'Surveillance & Fog CAMs', icon: Camera },
     { id: 'innovation', label: 'Why Green ThinkerX Wins', icon: Sparkles },
-    { id: 'settings', label: 'Hardware & Settings', icon: Settings },
   ];
+
+  // Restricted admin tabs (Visible ONLY to Owner / Master Admin Aman Kumar)
+  const adminTabs = [
+    { id: 'users', label: '👑 Visitor & User Logins', icon: Users },
+    { id: 'settings', label: '👑 Hardware & Settings', icon: Settings },
+  ];
+
+  const navTabs = isAdmin ? [...baseTabs, ...adminTabs] : baseTabs;
+
+  // Security guard: redirect if non-admin attempts to view restricted tabs
+  useEffect(() => {
+    if (!isAdmin && (activeTab === 'users' || activeTab === 'settings')) {
+      setActiveTab('overview');
+    }
+  }, [isAdmin, activeTab]);
 
   return (
     <div className={`min-h-screen text-slate-100 flex flex-col font-sans relative transition-colors duration-500 ${
       overallStatus === 'critical' ? 'ring-8 ring-inset ring-red-600/40' : ''
     }`}>
       
+      {/* First-Time Visitor Login Gate (Strict Gmail & Google Auth) */}
+      {!currentUser && (
+        <LoginModal onLoginSuccess={(userObj) => setCurrentUser(userObj)} />
+      )}
+
       {/* Animated Subterranean Particle Cyber Background */}
       <CyberBackground />
       
-      {/* Top Header with Brand, CMSI Radial Meter, Siren & Report Button */}
+      {/* Top Header with Brand, CMSI Radial Meter, User Profile & Logout */}
       <Header
         cmsi={cmsi}
         status={overallStatus}
@@ -321,6 +361,8 @@ export default function App() {
         onExportReport={() => setIsDgmsModalOpen(true)}
         currentShift={currentShift}
         onChangeShift={setCurrentShift}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Tri-State Alarm Banner */}
@@ -502,9 +544,14 @@ export default function App() {
           <InnovationSection />
         )}
 
-        {/* TAB 11: SETTINGS & HARDWARE BRIDGE */}
-        {activeTab === 'settings' && (
+        {/* TAB 11: SETTINGS & HARDWARE BRIDGE (OWNER / ADMIN EXCLUSIVE) */}
+        {activeTab === 'settings' && isAdmin && (
           <SettingsSection />
+        )}
+
+        {/* TAB 12: VISITOR & USER LOGINS AUDIT (OWNER / ADMIN EXCLUSIVE) */}
+        {activeTab === 'users' && isAdmin && (
+          <UserAccessLogSection currentUser={currentUser} />
         )}
 
       </main>

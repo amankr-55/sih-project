@@ -37,10 +37,18 @@ export default function CyberBackground() {
 
       // Modern high-visibility command-center steel navy gradient
       const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bgGrad.addColorStop(0, '#0c1d38');   // Rich clean command navy
-      bgGrad.addColorStop(0.5, '#14294e'); // Modern steel aerospace blue
-      bgGrad.addColorStop(1, '#0f223f');   // Sleek slate navy
+      bgGrad.addColorStop(0, '#0e2448');   // Rich clean command navy
+      bgGrad.addColorStop(0.5, '#16315c'); // Modern steel aerospace blue
+      bgGrad.addColorStop(1, '#102746');   // Sleek slate navy
       ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Top ambient command lighting aura
+      const radialAura = ctx.createRadialGradient(canvas.width / 2, 0, 10, canvas.width / 2, 0, canvas.width * 0.75);
+      radialAura.addColorStop(0, 'rgba(34, 211, 238, 0.15)');
+      radialAura.addColorStop(0.5, 'rgba(59, 130, 246, 0.08)');
+      radialAura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = radialAura;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Subtle cyan grid lines
