@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Ruler, AlertTriangle, Eye, ShieldCheck, Thermometer, ArrowUpRight } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
@@ -64,7 +64,7 @@ export default function CrackSection({ nodes, maxCrack }) {
 
           <div className="relative rounded-xl overflow-hidden border border-slate-800 group">
             <img 
-              src="/images/thermal_crack.jpg" 
+              src="./images/thermal_crack.jpg" 
               alt="Thermal View of Mine Strata Crack" 
               className="w-full h-72 object-cover transition-transform duration-500 group-hover:scale-105"
             />

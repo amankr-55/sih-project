@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { MapPin, Radio, Battery, Compass, Layers, ShieldCheck, AlertTriangle, HardHat } from 'lucide-react';
 
 export default function SensorLocationsSection({ nodes, onSelectNode }) {
@@ -48,7 +48,7 @@ export default function SensorLocationsSection({ nodes, onSelectNode }) {
               {/* Photo Banner with Node Badge */}
               <div className="relative h-44 overflow-hidden bg-slate-950">
                 <img 
-                  src={node.image || "/images/sensor_node.jpg"} 
+                  src={node.image || "./images/sensor_node.jpg"} 
                   alt={node.name} 
                   className="w-full h-full object-cover opacity-85 hover:opacity-100 transition-opacity"
                 />

@@ -88,13 +88,13 @@ export default function NodeLiveInspector({ node, allNodes, onSelectNodeId }) {
   };
 
   // Determine node specific photo
-  let nodePhoto = node.image || '/images/sensor_node.jpg';
-  if (node.id === 'NODE-01') nodePhoto = '/images/thermal_crack.jpg';
-  else if (node.id === 'NODE-02') nodePhoto = '/images/fog_camera.jpg';
-  else if (node.id === 'NODE-03') nodePhoto = '/images/node3_pillar.jpg';
-  else if (node.id === 'NODE-04') nodePhoto = '/images/node4_vent.jpg';
-  else if (node.id === 'NODE-05') nodePhoto = '/images/sensor_node.jpg';
-  else if (node.id === 'NODE-06') nodePhoto = '/images/node6_surface.jpg';
+  let nodePhoto = node.image || './images/sensor_node.jpg';
+  if (node.id === 'NODE-01') nodePhoto = './images/thermal_crack.jpg';
+  else if (node.id === 'NODE-02') nodePhoto = './images/fog_camera.jpg';
+  else if (node.id === 'NODE-03') nodePhoto = './images/node3_pillar.jpg';
+  else if (node.id === 'NODE-04') nodePhoto = './images/node4_vent.jpg';
+  else if (node.id === 'NODE-05') nodePhoto = './images/sensor_node.jpg';
+  else if (node.id === 'NODE-06') nodePhoto = './images/node6_surface.jpg';
 
   return (
     <div className="bg-[#121e36]/90 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-6">
@@ -172,7 +172,7 @@ export default function NodeLiveInspector({ node, allNodes, onSelectNodeId }) {
 
             <div className="relative h-72 rounded-2xl overflow-hidden border border-slate-700 bg-black group">
               <img
-                src={visionMode === 'thermal' ? '/images/thermal_crack.jpg' : visionMode === 'defog' ? '/images/fog_camera.jpg' : nodePhoto}
+                src={visionMode === 'thermal' ? './images/thermal_crack.jpg' : visionMode === 'defog' ? './images/fog_camera.jpg' : nodePhoto}
                 alt={node.name}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />

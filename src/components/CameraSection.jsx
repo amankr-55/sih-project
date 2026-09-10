@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Camera, Eye, CloudFog, Thermometer, ShieldAlert, RefreshCw, Layers, CheckCircle2, Image as ImageIcon, Download, Flashlight } from 'lucide-react';
 
 export default function CameraSection() {
@@ -10,7 +10,7 @@ export default function CameraSection() {
       title: 'Active Face 3-A Strata Fissure',
       time: '10:22:15 PM',
       type: 'Thermal FLIR',
-      image: '/images/thermal_crack.jpg',
+      image: './images/thermal_crack.jpg',
       status: 'Advisory Heat Leakage'
     },
     {
@@ -18,7 +18,7 @@ export default function CameraSection() {
       title: 'Haulage Roadway (0% Visibility Fog)',
       time: '10:24:40 PM',
       type: 'AI Wireframe De-Fog',
-      image: '/images/fog_camera.jpg',
+      image: './images/fog_camera.jpg',
       status: 'Path Cleared via AI'
     },
     {
@@ -26,7 +26,7 @@ export default function CameraSection() {
       title: 'Pillar 14-B Sensor Node Anchor',
       time: '10:27:02 PM',
       type: 'Optical Inspection',
-      image: '/images/sensor_node.jpg',
+      image: './images/sensor_node.jpg',
       status: 'Anchor Stable'
     }
   ]);
@@ -47,7 +47,7 @@ export default function CameraSection() {
           : 'Underground Fog-Penetration AI Feed',
         time: timeStr,
         type: activeViewMode === 'thermal' ? 'Thermal FLIR' : activeViewMode === 'hardware' ? 'Optical Anchor' : 'AI De-Fog AR',
-        image: activeViewMode === 'thermal' ? '/images/thermal_crack.jpg' : activeViewMode === 'hardware' ? '/images/sensor_node.jpg' : '/images/fog_camera.jpg',
+        image: activeViewMode === 'thermal' ? './images/thermal_crack.jpg' : activeViewMode === 'hardware' ? './images/sensor_node.jpg' : './images/fog_camera.jpg',
         status: 'Situation Logged'
       };
 
@@ -144,9 +144,9 @@ export default function CameraSection() {
         <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-black min-h-[420px] flex items-center justify-center">
           <img
             src={
-              activeViewMode === 'fog' ? '/images/fog_camera.jpg' :
-              activeViewMode === 'thermal' ? '/images/thermal_crack.jpg' :
-              '/images/sensor_node.jpg'
+              activeViewMode === 'fog' ? './images/fog_camera.jpg' :
+              activeViewMode === 'thermal' ? './images/thermal_crack.jpg' :
+              './images/sensor_node.jpg'
             }
             alt="Mine Surveillance Feed"
             className="w-full h-full object-cover max-h-[500px]"
