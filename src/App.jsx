@@ -1,11 +1,11 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import AlarmBanner from './components/AlarmBanner';
 import SpatialMineGrid from './components/SpatialMineGrid';
 import TelemetryPanels from './components/TelemetryPanels';
 import SimulationControls from './components/SimulationControls';
 import EventLog from './components/EventLog';
-import NodeDetailModal from './components/NodeDetailModal';
+import NodeLiveInspector from './components/NodeLiveInspector';
 import DgmsReportModal from './components/DgmsReportModal';
 
 // Dedicated Sensor & Analytics Sections
@@ -20,6 +20,8 @@ import Strata3DVisualizer from './components/Strata3DVisualizer';
 import Sensor3DModel from './components/Sensor3DModel';
 import InnovationSection from './components/InnovationSection';
 import SettingsSection from './components/SettingsSection';
+import SensorDiagnosticsSection from './components/SensorDiagnosticsSection';
+import CyberBackground from './components/CyberBackground';
 
 import { 
   LayoutDashboard, 
@@ -27,12 +29,13 @@ import {
   Droplets, 
   Activity, 
   Ruler, 
-  Wind,
+  Wind, 
   MapPin, 
   Camera, 
   Settings, 
   Cpu,
-  Sparkles
+  Sparkles,
+  Gauge
 } from 'lucide-react';
 
 import { 
@@ -49,7 +52,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview'); 
   const [nodes, setNodes] = useState(INITIAL_NODES);
   const [historyData, setHistoryData] = useState(generateInitialChartHistory());
-  const [selectedNode, setSelectedNode] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(INITIAL_NODES[0]);
   const [isSirenActive, setIsSirenActive] = useState(false);
   const [currentShift, setCurrentShift] = useState('Shift-A');
   const [activeMiners, setActiveMiners] = useState(48);
@@ -290,6 +293,7 @@ export default function App() {
     { id: 'cracks', label: 'Strata Cracks', icon: Ruler },
     { id: 'gas', label: 'Gas Safety', icon: Wind },
     { id: 'sensor3d', label: '3D Hardware Twin', icon: Cpu },
+    { id: 'diagnostics', label: 'Sensors Check', icon: Gauge },
     { id: 'locations', label: 'Sensor Locations', icon: MapPin },
     { id: 'cameras', label: 'Surveillance & Fog CAMs', icon: Camera },
     { id: 'innovation', label: 'Why Green ThinkerX Wins', icon: Sparkles },
@@ -297,9 +301,12 @@ export default function App() {
   ];
 
   return (
-    <div className={`min-h-screen text-slate-100 flex flex-col font-sans transition-colors duration-500 ${
+    <div className={`min-h-screen text-slate-100 flex flex-col font-sans relative transition-colors duration-500 ${
       overallStatus === 'critical' ? 'ring-8 ring-inset ring-red-600/40' : ''
     }`}>
+      
+      {/* Animated Subterranean Particle Cyber Background */}
+      <CyberBackground />
       
       {/* Top Header with Brand, CMSI Radial Meter, Siren & Report Button */}
       <Header
@@ -358,8 +365,12 @@ export default function App() {
               <div className="lg:col-span-7 min-h-[480px]">
                 <SpatialMineGrid
                   nodes={nodes}
-                  onSelectNode={(node) => setSelectedNode(node)}
-                  selectedNodeId={selectedNode ? selectedNode.id : null}
+                  onSelectNode={(node) => {
+                    setSelectedNode(node);
+                    const el = document.getElementById('node-inspector-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  selectedNodeId={selectedNode ? selectedNode.id : nodes[0]?.id}
                 />
               </div>
 
@@ -369,6 +380,18 @@ export default function App() {
                   status={overallStatus}
                 />
               </div>
+            </div>
+
+            {/* Real-Time Node-Level 360° Environmental Recon & Telemetry Hub */}
+            <div id="node-inspector-section">
+              <NodeLiveInspector
+                node={selectedNode || nodes[0]}
+                allNodes={nodes}
+                onSelectNodeId={(id) => {
+                  const target = nodes.find(n => n.id === id);
+                  if (target) setSelectedNode(target);
+                }}
+              />
             </div>
 
             {/* Middle Row: 3D Geological Strata Model */}
@@ -443,11 +466,25 @@ export default function App() {
           />
         )}
 
-        {/* TAB 8: SENSOR LOCATIONS */}
+        {/* TAB 8: SENSOR DIAGNOSTICS & RATIOS */}
+        {activeTab === 'diagnostics' && (
+          <SensorDiagnosticsSection
+            nodes={nodes}
+          />
+        )}
+
+        {/* TAB 9: SENSOR LOCATIONS */}
         {activeTab === 'locations' && (
           <SensorLocationsSection
             nodes={nodes}
-            onSelectNode={(node) => setSelectedNode(node)}
+            onSelectNode={(node) => {
+              setSelectedNode(node);
+              setActiveTab('overview');
+              setTimeout(() => {
+                const el = document.getElementById('node-inspector-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }, 80);
+            }}
           />
         )}
 
@@ -481,15 +518,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-
-      {/* Drill-down Modal for Node Inspection */}
-      {selectedNode && (
-        <NodeDetailModal
-          node={nodes.find(n => n.id === selectedNode.id) || selectedNode}
-          onClose={() => setSelectedNode(null)}
-          onSimulateNodeChange={handleManualSliderChange}
-        />
-      )}
 
       {/* DGMS Shift Audit Exporter Modal Preview */}
       <DgmsReportModal
