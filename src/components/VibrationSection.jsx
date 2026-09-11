@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Radio, AlertTriangle, ShieldCheck, Zap, Waves as WaveIcon } from 'lucide-react';
+import { Activity, Radio, AlertTriangle, ShieldCheck, Zap, Waves as WaveIcon, Maximize2 } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
+import { getAssetUrl } from '../utils/assetHelper';
+import ImageLightboxModal from './ImageLightboxModal';
 
 export default function VibrationSection({ nodes, onInjectTremor }) {
   const canvasRef = useRef(null);
   const [activeNodeId, setActiveNodeId] = useState('NODE-01');
   const [tremorBurst, setTremorBurst] = useState(false);
+  const [lightboxData, setLightboxData] = useState(null);
 
   const activeNode = nodes.find(n => n.id === activeNodeId) || nodes[0];
   const peakG = activeNode.vibrationG || 0.06;
@@ -95,16 +98,29 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
   return (
     <div className="space-y-6 animate-fade-in text-white">
       
+      {/* Lightbox Modal */}
+      {lightboxData && (
+        <ImageLightboxModal 
+          isOpen={!!lightboxData}
+          onClose={() => setLightboxData(null)}
+          imageSrc={lightboxData.image}
+          title={lightboxData.title}
+          subtitle={lightboxData.desc}
+          location={lightboxData.location}
+          badge={lightboxData.badge}
+        />
+      )}
+
       {/* Header Banner - High Contrast */}
-      <div className="bg-[#18253f] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
+      <div className="bg-[#152238] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
         <div className="flex items-center gap-4">
           <div className="p-4 rounded-2xl bg-cyan-500/30 text-cyan-300 border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
             <Activity className="w-10 h-10 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex items-center gap-3">
-              SEISMIC MICRO-TREMOR & 3-AXIS VIBRATION MONITOR
-              <span className="text-xs bg-cyan-500 text-slate-950 font-black px-3 py-1 rounded-full uppercase">
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex flex-wrap items-center gap-3">
+              <span>SEISMIC MICRO-TREMOR & 3-AXIS VIBRATION MONITOR</span>
+              <span className="text-xs bg-cyan-500 text-slate-950 font-black px-3.5 py-1 rounded-full uppercase">
                 60 FPS LIVE STREAM
               </span>
             </h2>
@@ -115,7 +131,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
         </div>
 
         {/* Station select & inject button */}
-        <div className="flex items-center gap-3 bg-[#0d1627] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
+        <div className="flex items-center gap-3 bg-[#0f192b] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
           <span className="text-sm text-white font-black">Station:</span>
           <select
             value={activeNodeId}
@@ -145,7 +161,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left: 60 FPS Real-time Oscilloscope (7 cols) */}
-        <div className="lg:col-span-7 bg-[#182642] border border-slate-700 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-[#132240] border-2 border-slate-600/80 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-black text-white font-mono flex items-center gap-2">
@@ -174,17 +190,17 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-3 text-center text-xs font-mono">
-            <div className="bg-[#0e172a] p-3 rounded-xl border border-slate-700">
+            <div className="bg-[#0f192b] p-3.5 rounded-xl border border-slate-700">
               <span className="text-slate-300 text-xs font-bold block">X-Axis (Dip)</span>
-              <span className="text-lg font-black text-cyan-300">{(peakG * 0.7).toFixed(3)} g</span>
+              <span className="text-xl font-black text-cyan-300">{(peakG * 0.7).toFixed(3)} g</span>
             </div>
-            <div className="bg-[#0e172a] p-3 rounded-xl border border-slate-700">
+            <div className="bg-[#0f192b] p-3.5 rounded-xl border border-slate-700">
               <span className="text-slate-300 text-xs font-bold block">Y-Axis (Strike)</span>
-              <span className="text-lg font-black text-blue-300">{(peakG * 0.5).toFixed(3)} g</span>
+              <span className="text-xl font-black text-blue-300">{(peakG * 0.5).toFixed(3)} g</span>
             </div>
-            <div className="bg-[#0e172a] p-3 rounded-xl border border-slate-700">
+            <div className="bg-[#0f192b] p-3.5 rounded-xl border border-slate-700">
               <span className="text-slate-300 text-xs font-bold block">Z-Axis (Sag)</span>
-              <span className="text-lg font-black text-purple-300">{(peakG * 0.9).toFixed(3)} g</span>
+              <span className="text-xl font-black text-purple-300">{(peakG * 0.9).toFixed(3)} g</span>
             </div>
           </div>
         </div>
@@ -193,7 +209,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
         <div className="lg:col-span-5 flex flex-col gap-5">
           
           {/* Peak Acceleration Gauge Card */}
-          <div className="bg-[#182642] border border-slate-700 rounded-3xl p-6 shadow-xl">
+          <div className="bg-[#132240] border-2 border-slate-600/80 rounded-3xl p-6 shadow-2xl">
             <span className="text-xs text-slate-300 font-black uppercase tracking-wider block mb-2 font-mono">
               Peak Resultant Acceleration
             </span>
@@ -226,23 +242,36 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
             </div>
           </div>
 
-          {/* Scientific Seismic Wave Propagation Graphic */}
-          <div className="bg-[#182642] border border-slate-700 rounded-3xl overflow-hidden shadow-xl group flex-1 flex flex-col justify-between">
-            <div className="relative h-52 overflow-hidden bg-black">
+          {/* Scientific Seismic Wave Propagation Graphic - Full Visibility with Click to Enlarge */}
+          <div 
+            onClick={() => setLightboxData({
+              image: getAssetUrl('images/seismic_vibration.jpg'),
+              title: '3D Seismic Wave Propagation & Spectral Density',
+              desc: 'Strata Acoustic Geophone Array tracking micro-seismic P-wave (3,850 m/s) and S-wave fracture frequency spectrogram.',
+              location: 'Strata Acoustic Geophone Array',
+              badge: 'MICRO-SEISMIC 3D'
+            })}
+            className="bg-[#132240] border-2 border-slate-600/80 rounded-3xl overflow-hidden shadow-2xl group flex-1 flex flex-col justify-between cursor-pointer"
+          >
+            <div className="relative h-56 overflow-hidden bg-black">
               <img
-                src="./images/seismic_vibration.jpg"
+                src={getAssetUrl('images/seismic_vibration.jpg')}
                 alt="Seismic Wave Propagation 3D"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103 brightness-105 contrast-105"
               />
-              <div className="absolute top-3 left-3 bg-black/85 backdrop-blur border border-cyan-400 px-3 py-1 rounded-xl text-xs font-mono font-black text-cyan-300">
+              <div className="absolute top-3 left-3 bg-cyan-600 text-slate-950 font-mono font-black text-xs px-3 py-1 rounded-xl shadow-lg">
                 P-WAVE & S-WAVE FREQUENCY SPECTRUM
+              </div>
+              <div className="absolute top-3 right-3 bg-black/75 backdrop-blur px-3 py-1.5 rounded-xl border border-white/30 text-xs font-mono font-bold text-white flex items-center gap-2 shadow-lg group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors">
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>Click to Enlarge</span>
               </div>
             </div>
             
-            <div className="p-4 bg-[#101b30] flex items-center justify-between text-xs font-mono">
+            <div className="p-4 bg-[#0f192b] flex items-center justify-between text-xs font-mono border-t border-slate-700">
               <div>
                 <strong className="text-white text-sm block">P-Wave Velocity: 3,850 m/s</strong>
-                <span className="text-slate-300 font-sans">Massive Sandstone Overburden • AE Frequency: 14.2 Hz</span>
+                <span className="text-slate-200 font-sans font-bold">Massive Sandstone Overburden • AE Frequency: 14.2 Hz</span>
               </div>
               <span className="text-cyan-300 font-bold bg-cyan-950 px-3 py-1.5 rounded-xl border border-cyan-500/40">
                 FFT: REAL-TIME

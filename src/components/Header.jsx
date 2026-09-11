@@ -12,7 +12,9 @@ import {
   Clock,
   Sparkles,
   LogOut,
-  UserCheck
+  UserCheck,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function Header({ 
@@ -25,7 +27,9 @@ export default function Header({
   currentShift,
   onChangeShift,
   currentUser,
-  onLogout
+  onLogout,
+  themeMode = 'dark',
+  onToggleTheme
 }) {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -192,6 +196,27 @@ export default function Header({
               </>
             )}
           </button>
+
+          {/* Theme Mode Switcher */}
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-600 shadow-md"
+              title="Toggle Theme Visibility Mode"
+            >
+              {themeMode === 'light' ? (
+                <>
+                  <Moon className="w-4 h-4 text-cyan-400" />
+                  <span className="hidden sm:inline">Slate Mode</span>
+                </>
+              ) : (
+                <>
+                  <Sun className="w-4 h-4 text-amber-400" />
+                  <span className="hidden sm:inline">Daylight Mode</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Export DGMS Report Button */}
           <button

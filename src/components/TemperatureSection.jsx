@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Thermometer, Flame, AlertTriangle, ShieldCheck, Sun, Wind, ArrowUpRight, Gauge, CheckCircle2 } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
@@ -16,15 +16,15 @@ export default function TemperatureSection({ nodes }) {
     <div className="space-y-6 animate-fade-in text-white">
       
       {/* Header Banner - Ultra High Contrast & Brightness */}
-      <div className="bg-[#18253f] border-2 border-orange-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
+      <div className="bg-[#152238] border-2 border-orange-500/50 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
         <div className="flex items-center gap-4">
           <div className="p-4 rounded-2xl bg-orange-500/30 text-orange-300 border-2 border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.5)]">
             <Thermometer className="w-10 h-10 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex items-center gap-3">
-              SUBTERRANEAN TEMPERATURE & STRATA HEAT MONITOR
-              <span className="text-xs bg-orange-500 text-slate-950 font-black px-3 py-1 rounded-full uppercase">
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex flex-wrap items-center gap-3">
+              <span>SUBTERRANEAN TEMPERATURE & STRATA HEAT MONITOR</span>
+              <span className="text-xs bg-orange-500 text-slate-950 font-black px-3.5 py-1 rounded-full uppercase">
                 DGMS CMR 2017 MANDATE
               </span>
             </h2>
@@ -34,7 +34,7 @@ export default function TemperatureSection({ nodes }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 bg-[#0d1627] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
+        <div className="flex items-center gap-3 bg-[#0f192b] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
           <span className="text-sm text-white font-black">Station:</span>
           <select
             value={selectedNodeId}
@@ -60,7 +60,7 @@ export default function TemperatureSection({ nodes }) {
             ? 'bg-red-950/90 border-red-500 shadow-red-900/50 animate-hazard-pulse' 
             : isTempAdvisory 
             ? 'bg-amber-950/80 border-amber-500 shadow-amber-900/40' 
-            : 'bg-[#182642] border-slate-600 shadow-xl'
+            : 'bg-[#132240] border-slate-600/80 shadow-2xl'
         }`}>
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -135,7 +135,7 @@ export default function TemperatureSection({ nodes }) {
           {/* 3 Metric Cards - High Visibility */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             
-            <div className="bg-[#182642] border border-slate-700 p-5 rounded-3xl shadow-xl text-center">
+            <div className="bg-[#132240] border-2 border-slate-600/80 p-5 rounded-3xl shadow-2xl text-center">
               <span className="text-xs font-black text-cyan-300 uppercase block mb-1">Wet-Bulb Index</span>
               <span className="text-4xl font-black font-mono text-cyan-300">
                 {(currentTemp * 0.88).toFixed(1)}°C
@@ -143,7 +143,7 @@ export default function TemperatureSection({ nodes }) {
               <span className="text-xs text-slate-200 font-bold block mt-1">DGMS Max Limit: 38.0°C</span>
             </div>
 
-            <div className="bg-[#182642] border border-slate-700 p-5 rounded-3xl shadow-xl text-center">
+            <div className="bg-[#132240] border-2 border-slate-600/80 p-5 rounded-3xl shadow-2xl text-center">
               <span className="text-xs font-black text-purple-300 uppercase block mb-1">Geothermal Gradient</span>
               <span className="text-4xl font-black font-mono text-purple-300">
                 +2.8°C
@@ -151,7 +151,7 @@ export default function TemperatureSection({ nodes }) {
               <span className="text-xs text-slate-200 font-bold block mt-1">Per 100m Subterranean Depth</span>
             </div>
 
-            <div className="bg-[#182642] border border-slate-700 p-5 rounded-3xl shadow-xl text-center">
+            <div className="bg-[#132240] border-2 border-slate-600/80 p-5 rounded-3xl shadow-2xl text-center">
               <span className="text-xs font-black text-emerald-300 uppercase block mb-1">Ventilation Heat Purge</span>
               <span className="text-4xl font-black font-mono text-emerald-300">
                 420 kW
@@ -162,7 +162,7 @@ export default function TemperatureSection({ nodes }) {
           </div>
 
           {/* All Seams Thermal List */}
-          <div className="bg-[#182642] border border-slate-700 p-6 rounded-3xl shadow-xl flex-1">
+          <div className="bg-[#132240] border-2 border-slate-600/80 p-6 rounded-3xl shadow-2xl flex-1">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
                 <Flame className="w-5 h-5 text-orange-400" />

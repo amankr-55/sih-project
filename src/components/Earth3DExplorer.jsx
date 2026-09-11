@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Globe, 
   Layers, 
@@ -15,6 +15,8 @@ import {
   HardHat,
   ArrowDown
 } from 'lucide-react';
+import { getAssetUrl } from '../utils/assetHelper';
+import ImageLightboxModal from './ImageLightboxModal';
 
 export default function Earth3DExplorer() {
   const [faceAdvance, setFaceAdvance] = useState(185); // meters into panel
@@ -22,6 +24,7 @@ export default function Earth3DExplorer() {
   const [depthOfCover, setDepthOfCover] = useState(180); // meters overburden depth
   const [isRotating, setIsRotating] = useState(true);
   const [viewMode, setViewMode] = useState('strata'); // 'strata', 'subsidence-curve', 'aquifer'
+  const [lightboxData, setLightboxData] = useState(null);
   
   const canvasRef = useRef(null);
 
@@ -396,75 +399,147 @@ export default function Earth3DExplorer() {
 
       </div>
 
-      {/* Realistic Real-World Photographic Evidence & Surveillance Section */}
-      <div className="bg-[#182642] border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4">
-        <h3 className="text-lg font-black text-white tracking-wide uppercase flex items-center gap-2">
-          <HardHat className="w-6 h-6 text-amber-400" />
-          REAL-WORLD STRATA SUBSIDENCE EVIDENCE & PHYSICAL DAMAGE SURVEILLANCE
-        </h3>
-        <p className="text-sm text-slate-200 font-medium">
-          Actual physical photographs showing why early warning subsidence monitoring is vital for Indian underground coalfields
-        </p>
+      {/* Lightbox Modal for 100% Unobstructed Full Screen View */}
+      {lightboxData && (
+        <ImageLightboxModal 
+          isOpen={!!lightboxData}
+          onClose={() => setLightboxData(null)}
+          imageSrc={lightboxData.image}
+          title={lightboxData.title}
+          subtitle={lightboxData.desc}
+          location={lightboxData.location}
+          badge={lightboxData.badge}
+        />
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
+      {/* Realistic Real-World Photographic Evidence & Surveillance Section */}
+      <div className="bg-[#132240] border-2 border-slate-600/80 rounded-3xl p-6 shadow-2xl space-y-5">
+        <div>
+          <h3 className="text-xl font-black text-white tracking-wide uppercase flex items-center gap-2.5">
+            <HardHat className="w-6 h-6 text-amber-400" />
+            <span>REAL-WORLD STRATA SUBSIDENCE EVIDENCE & PHYSICAL DAMAGE SURVEILLANCE</span>
+          </h3>
+          <p className="text-base text-slate-100 font-bold mt-1">
+            Actual physical field photographs showing why real-time early warning subsidence monitoring is mandatory for Indian underground coalfields.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
           
           {/* Card 1: Surface Road Fissure */}
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl overflow-hidden shadow-xl group">
-            <div className="relative h-56 overflow-hidden">
+          <div 
+            onClick={() => setLightboxData({
+              image: getAssetUrl('images/road_subsidence.jpg'),
+              title: 'Surface Highway & Road Shear Fissures',
+              desc: 'Surface highway collapsing due to underground roof caving. Tensile strains exceed 3.0 mm/m, causing asphalt buckling and structural severance.',
+              location: 'Overburden Surface Sector-B (Chainage 14+200)',
+              badge: 'SURFACE DAMAGE'
+            })}
+            className="bg-[#0f192b] border-2 border-slate-700 rounded-2xl overflow-hidden shadow-xl group hover:border-red-500 transition-all cursor-pointer flex flex-col"
+          >
+            <div className="relative h-64 overflow-hidden bg-black">
               <img
-                src="./images/road_subsidence.jpg"
+                src={getAssetUrl('images/road_subsidence.jpg')}
                 alt="Surface Road Collapse from Subsidence"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 brightness-105 contrast-105"
               />
-              <div className="absolute top-2.5 left-2.5 bg-black/80 backdrop-blur border border-red-500 px-3 py-1 rounded-xl text-xs font-mono font-bold text-red-300">
+              <div className="absolute top-3 left-3 bg-red-600 text-white font-mono font-black text-xs px-3 py-1 rounded-xl shadow-lg">
                 SURFACE SUBSIDENCE TROUGH
               </div>
+              <div className="absolute inset-0 bg-red-600/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="bg-black/85 text-white text-xs font-mono font-bold px-3 py-1.5 rounded-xl border border-red-400 flex items-center gap-1.5">
+                  <Maximize2 className="w-3.5 h-3.5 text-red-400" /> Click to Enlarge
+                </span>
+              </div>
             </div>
-            <div className="p-4 space-y-1.5">
-              <h4 className="text-base font-black text-white">Surface Highway & Road Shear Fissures</h4>
-              <p className="text-xs text-slate-200 leading-relaxed font-medium">
-                Surface highway collapsing due to underground roof caving. Tensile strains exceed 3.0 mm/m, causing complete asphalt buckling and structural severance.
-              </p>
+            <div className="p-5 space-y-2 flex-1 flex flex-col justify-between">
+              <div>
+                <h4 className="text-lg font-black text-white">Surface Highway & Road Shear Fissures</h4>
+                <p className="text-sm text-slate-100 leading-relaxed font-normal mt-1.5">
+                  Surface highway collapsing due to underground roof caving. Tensile strains exceed 3.0 mm/m, causing complete asphalt buckling and structural severance.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-700 text-xs font-mono font-bold text-red-400">
+                CRITICAL THRESHOLD: BREACHED (&gt;3.0 mm/m)
+              </div>
             </div>
           </div>
 
           {/* Card 2: Underground Extensometer Monitoring */}
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl overflow-hidden shadow-xl group">
-            <div className="relative h-56 overflow-hidden">
+          <div 
+            onClick={() => setLightboxData({
+              image: getAssetUrl('images/real_mine_crack.jpg'),
+              title: 'Underground Strata Crack Dilatometer',
+              desc: 'Linear LVDT / Potentiometric extensometer bolted into fractured rock roof. Directly measures micro-fissure dilation in real-time before catastrophic roof falls.',
+              location: 'Seam 3-A Longwall Face Rib',
+              badge: 'FRACTURE GAUGING'
+            })}
+            className="bg-[#0f192b] border-2 border-slate-700 rounded-2xl overflow-hidden shadow-xl group hover:border-cyan-400 transition-all cursor-pointer flex flex-col"
+          >
+            <div className="relative h-64 overflow-hidden bg-black">
               <img
-                src="./images/real_mine_crack.jpg"
+                src={getAssetUrl('images/real_mine_crack.jpg')}
                 alt="Underground Crack Extensometer"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 brightness-105 contrast-105"
               />
-              <div className="absolute top-2.5 left-2.5 bg-black/80 backdrop-blur border border-cyan-500 px-3 py-1 rounded-xl text-xs font-mono font-bold text-cyan-300">
+              <div className="absolute top-3 left-3 bg-cyan-600 text-slate-950 font-mono font-black text-xs px-3 py-1 rounded-xl shadow-lg">
                 SUBTERRANEAN EXTENSOMETER
               </div>
+              <div className="absolute inset-0 bg-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="bg-black/85 text-white text-xs font-mono font-bold px-3 py-1.5 rounded-xl border border-cyan-400 flex items-center gap-1.5">
+                  <Maximize2 className="w-3.5 h-3.5 text-cyan-400" /> Click to Enlarge
+                </span>
+              </div>
             </div>
-            <div className="p-4 space-y-1.5">
-              <h4 className="text-base font-black text-white">Underground Strata Crack Dilatometer</h4>
-              <p className="text-xs text-slate-200 leading-relaxed font-medium">
-                Linear LVDT / Potentiometric extensometer bolted into fractured rock roof. Directly measures micro-fissure dilation in real-time before catastrophic roof falls.
-              </p>
+            <div className="p-5 space-y-2 flex-1 flex flex-col justify-between">
+              <div>
+                <h4 className="text-lg font-black text-white">Underground Strata Crack Dilatometer</h4>
+                <p className="text-sm text-slate-100 leading-relaxed font-normal mt-1.5">
+                  Linear LVDT / Potentiometric extensometer bolted into fractured rock roof. Directly measures micro-fissure dilation in real-time before catastrophic roof falls.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-700 text-xs font-mono font-bold text-cyan-300">
+                MICRON RESOLUTION: ±0.01 mm
+              </div>
             </div>
           </div>
 
           {/* Card 3: Water Inrush & Drainage Sump */}
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl overflow-hidden shadow-xl group">
-            <div className="relative h-56 overflow-hidden">
+          <div 
+            onClick={() => setLightboxData({
+              image: getAssetUrl('images/mine_water_sump.jpg'),
+              title: 'Aquifer Water Seepage & Reservoir',
+              desc: 'Subterranean water retention sump with staff gauge and submersible dewatering pumps. Monitors pore pressure to prevent quicksand strata liquefaction.',
+              location: 'Shaft 2 Bottom Dewatering Sump #04',
+              badge: 'AQUIFER SURVEILLANCE'
+            })}
+            className="bg-[#0f192b] border-2 border-slate-700 rounded-2xl overflow-hidden shadow-xl group hover:border-blue-400 transition-all cursor-pointer flex flex-col"
+          >
+            <div className="relative h-64 overflow-hidden bg-black">
               <img
-                src="./images/mine_water_sump.jpg"
+                src={getAssetUrl('images/mine_water_sump.jpg')}
                 alt="Underground Mine Water Sump"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 brightness-105 contrast-105"
               />
-              <div className="absolute top-2.5 left-2.5 bg-black/80 backdrop-blur border border-blue-500 px-3 py-1 rounded-xl text-xs font-mono font-bold text-blue-300">
+              <div className="absolute top-3 left-3 bg-blue-600 text-white font-mono font-black text-xs px-3 py-1 rounded-xl shadow-lg">
                 AQUIFER & DEWATERING SUMP
               </div>
+              <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="bg-black/85 text-white text-xs font-mono font-bold px-3 py-1.5 rounded-xl border border-blue-400 flex items-center gap-1.5">
+                  <Maximize2 className="w-3.5 h-3.5 text-blue-400" /> Click to Enlarge
+                </span>
+              </div>
             </div>
-            <div className="p-4 space-y-1.5">
-              <h4 className="text-base font-black text-white">Aquifer Water Seepage & Reservoir</h4>
-              <p className="text-xs text-slate-200 leading-relaxed font-medium">
-                Subterranean water retention sump with staff gauge and submersible dewatering pumps. Monitors pore pressure to prevent quicksand strata liquefaction.
-              </p>
+            <div className="p-5 space-y-2 flex-1 flex flex-col justify-between">
+              <div>
+                <h4 className="text-lg font-black text-white">Aquifer Water Seepage & Reservoir</h4>
+                <p className="text-sm text-slate-100 leading-relaxed font-normal mt-1.5">
+                  Subterranean water retention sump with staff gauge and submersible dewatering pumps. Monitors pore pressure to prevent quicksand strata liquefaction.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-700 text-xs font-mono font-bold text-blue-300">
+                AQUIFER PORE INGRESS: STABLE
+              </div>
             </div>
           </div>
 

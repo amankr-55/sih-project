@@ -1,9 +1,12 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
-import { Droplets, Waves, AlertTriangle, ShieldCheck, Gauge, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Droplets, Waves, AlertTriangle, ShieldCheck, Gauge, CheckCircle2, Maximize2 } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
+import { getAssetUrl } from '../utils/assetHelper';
+import ImageLightboxModal from './ImageLightboxModal';
 
 export default function MoistureSection({ nodes }) {
   const [selectedNodeId, setSelectedNodeId] = useState('NODE-01');
+  const [lightboxData, setLightboxData] = useState(null);
   const canvasRef = useRef(null);
 
   const activeNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
@@ -70,16 +73,29 @@ export default function MoistureSection({ nodes }) {
   return (
     <div className="space-y-6 animate-fade-in text-white">
       
+      {/* Lightbox Modal */}
+      {lightboxData && (
+        <ImageLightboxModal 
+          isOpen={!!lightboxData}
+          onClose={() => setLightboxData(null)}
+          imageSrc={lightboxData.image}
+          title={lightboxData.title}
+          subtitle={lightboxData.desc}
+          location={lightboxData.location}
+          badge={lightboxData.badge}
+        />
+      )}
+
       {/* Header Banner - High Contrast */}
-      <div className="bg-[#18253f] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
+      <div className="bg-[#152238] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
         <div className="flex items-center gap-4">
           <div className="p-4 rounded-2xl bg-blue-500/30 text-blue-300 border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
             <Droplets className="w-10 h-10 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex items-center gap-3">
-              PORE-WATER SATURATION & SOIL LIQUEFACTION MONITOR
-              <span className="text-xs bg-cyan-500 text-slate-950 font-black px-3 py-1 rounded-full uppercase">
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide flex flex-wrap items-center gap-3">
+              <span>PORE-WATER SATURATION & SOIL LIQUEFACTION MONITOR</span>
+              <span className="text-xs bg-cyan-500 text-slate-950 font-black px-3.5 py-1 rounded-full uppercase">
                 AQUIFER SENSING
               </span>
             </h2>
@@ -90,7 +106,7 @@ export default function MoistureSection({ nodes }) {
         </div>
 
         {/* Node selector */}
-        <div className="flex items-center gap-3 bg-[#0d1627] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
+        <div className="flex items-center gap-3 bg-[#0f192b] p-2.5 rounded-2xl border border-slate-700 shadow-lg">
           <span className="text-sm text-white font-black">Select Seam Probe:</span>
           <select
             value={selectedNodeId}
@@ -108,7 +124,7 @@ export default function MoistureSection({ nodes }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Animated Water Column Tank (6 cols) */}
-        <div className="lg:col-span-6 bg-[#182642] border border-slate-700 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-[#132240] border-2 border-slate-600/80 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-black text-white flex items-center gap-2 font-mono">
@@ -127,84 +143,94 @@ export default function MoistureSection({ nodes }) {
                 height={288}
                 className="w-full h-full block"
               />
-              
-              <div className="absolute top-4 left-4 bg-black/85 backdrop-blur border border-white/20 p-3.5 rounded-2xl font-mono shadow-xl">
-                <span className="text-xs text-slate-300 font-bold block">Current Pore Saturation</span>
-                <span className="text-4xl font-black text-white">{moisturePct.toFixed(1)}%</span>
-                <span className="text-xs text-amber-300 font-black block mt-1">Warning: &gt;70% | Critical: &gt;88%</span>
+              <div className="absolute top-3 left-4 font-mono text-xs text-white bg-black/75 px-3 py-1.5 rounded-xl border border-white/20">
+                Subterranean Piezometer: {activeNode.id}
               </div>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 text-xs font-mono">
-            <div className="bg-[#0e172a] p-3.5 rounded-xl border border-slate-700">
-              <span className="text-slate-300 text-xs font-bold block">Hydrostatic Pore Pressure</span>
-              <span className="text-xl font-black text-white">{(moisturePct * 0.42).toFixed(1)} kPa</span>
-            </div>
-            <div className="bg-[#0e172a] p-3.5 rounded-xl border border-slate-700">
-              <span className="text-slate-300 text-xs font-bold block">Groundwater Seepage Inflow</span>
-              <span className="text-xl font-black text-cyan-300">{(moisturePct * 0.08).toFixed(2)} L/min</span>
-            </div>
+          <div className="mt-4 flex items-center justify-between text-xs font-mono text-slate-200">
+            <span>Critical Saturation: &gt;88.0%</span>
+            <span className="text-cyan-400 font-bold">Dynamic Wave Propagation: Active</span>
           </div>
         </div>
 
-        {/* Liquefaction & Real Mine Sump Photo (6 cols) */}
+        {/* Liquefaction Hazard Metric Cards (6 cols) */}
         <div className="lg:col-span-6 flex flex-col gap-5">
           
-          {/* Liquefaction Status Banner */}
-          <div className={`p-5 rounded-3xl border-2 shadow-xl flex items-center justify-between gap-4 ${
-            isCritical ? 'bg-red-950/90 border-red-500 text-white' :
-            isAdvisory ? 'bg-amber-950/90 border-amber-500 text-white' :
-            'bg-emerald-950/90 border-emerald-500 text-white'
+          {/* Liquefaction Warning Card */}
+          <div className={`p-6 rounded-3xl border-2 shadow-2xl flex items-center justify-between ${
+            isCritical 
+              ? 'bg-red-950/90 border-red-500 text-red-100 animate-hazard-pulse' 
+              : isAdvisory 
+              ? 'bg-amber-950/80 border-amber-500 text-amber-100' 
+              : 'bg-[#132240] border-slate-600/80 text-white'
           }`}>
             <div>
-              <span className="text-base font-black uppercase tracking-wider block">
-                {isCritical ? 'CRITICAL: SEVERE STRATA LIQUEFACTION RISK' :
-                 isAdvisory ? 'ADVISORY: GROUNDWATER INGRESS ELEVATED' :
-                 'STATUTORY SAFE: STABLE DRY STRATA COEFFICIENT'}
+              <span className="text-xs font-black uppercase tracking-wider font-mono block mb-1">
+                Strata Liquefaction Assessment
               </span>
-              <p className="text-xs font-bold text-slate-100 mt-1 leading-relaxed">
-                {isCritical ? 'Rock mass shear strength degraded by >65%. High danger of quicksand inrush into active haulage.' :
-                 isAdvisory ? 'Pore pressure rising. Verify submersible dewatering pump operation in main drainage sump.' :
-                 'Overburden cohesion intact. Piezometric pore pressure normal below statutory warning limits.'}
+              <h3 className="text-2xl font-black">
+                {isCritical ? 'CRITICAL SLURRY INRUSH RISK' : isAdvisory ? 'ADVISORY: ELEVATED PORE PRESSURE' : 'SOIL COHESION STABLE'}
+              </h3>
+              <p className="text-sm font-bold text-slate-100 mt-1">
+                {isCritical 
+                  ? 'Pore water pressure exceeds effective vertical overburden stress. Immediate pump boost required!' 
+                  : isAdvisory 
+                  ? 'Water saturation approaching critical shear-failure threshold.' 
+                  : 'Capacitive sensors confirm normal dry sandstone strata matrix.'}
               </p>
             </div>
             <Gauge className="w-12 h-12 shrink-0 opacity-90" />
           </div>
 
-          {/* Real Sump Photo Card */}
-          <div className="bg-[#182642] border border-slate-700 rounded-3xl overflow-hidden shadow-xl group">
-            <div className="relative h-48 overflow-hidden bg-black">
+          {/* Real Sump Photo Card - Full Visibility & Click to Enlarge */}
+          <div 
+            onClick={() => setLightboxData({
+              image: getAssetUrl('images/mine_water_sump.jpg'),
+              title: 'Subterranean Retention Reservoir & Dewatering Sump',
+              desc: 'Subterranean water retention sump with staff gauge and submersible dewatering pumps. Monitors pore pressure to prevent quicksand strata liquefaction.',
+              location: 'Shaft 2 Bottom Dewatering Sump #04',
+              badge: 'AQUIFER SURVEILLANCE'
+            })}
+            className="bg-[#132240] border-2 border-slate-600/80 rounded-3xl overflow-hidden shadow-2xl group cursor-pointer"
+          >
+            <div className="relative h-56 overflow-hidden bg-black">
               <img
-                src="./images/mine_water_sump.jpg"
+                src={getAssetUrl('images/mine_water_sump.jpg')}
                 alt="Underground Drainage Sump"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103 brightness-105 contrast-105"
               />
-              <div className="absolute top-3 left-3 bg-black/85 backdrop-blur border border-blue-400 px-3 py-1 rounded-xl text-xs font-mono font-black text-blue-300">
+              <div className="absolute top-3 left-3 bg-blue-600 text-white font-mono font-black text-xs px-3 py-1 rounded-xl shadow-lg">
                 DRAINAGE SUMP #04 • WATER STAFF GAUGE
               </div>
+              <div className="absolute top-3 right-3 bg-black/75 backdrop-blur px-3 py-1.5 rounded-xl border border-white/30 text-xs font-mono font-bold text-white flex items-center gap-2 shadow-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>Click to Enlarge</span>
+              </div>
             </div>
-            <div className="p-4 bg-[#101b30] flex items-center justify-between text-xs">
+
+            <div className="p-4 bg-[#0f192b] flex items-center justify-between text-xs border-t border-slate-700">
               <div>
                 <strong className="text-white text-sm block">Subterranean Retention Reservoir & Dewatering Sump</strong>
-                <span className="text-slate-300 font-medium">Clear groundwater pool with staff gauge at 1.2m depth</span>
+                <span className="text-slate-200 font-bold">Clear groundwater pool with staff gauge at 1.2m depth</span>
               </div>
-              <span className="font-mono font-bold text-cyan-300 bg-cyan-950 px-3 py-1.5 rounded-xl border border-cyan-500/40">
+              <span className="font-mono font-black text-cyan-300 bg-cyan-950 px-3 py-1.5 rounded-xl border border-cyan-500/40">
                 PUMPS: ACTIVE
               </span>
             </div>
           </div>
 
           {/* Distribution list */}
-          <div className="bg-[#182642] border border-slate-700 p-5 rounded-3xl shadow-xl flex-1">
+          <div className="bg-[#132240] border-2 border-slate-600/80 p-6 rounded-3xl shadow-2xl flex-1">
             <span className="text-sm text-white font-black uppercase tracking-wider block mb-3">
               All 6 Monitoring Zones Moisture Distribution
             </span>
-            <div className="space-y-2.5 font-mono text-xs">
+            <div className="space-y-3 font-mono text-xs">
               {nodes.map(n => (
-                <div key={n.id} className="flex items-center justify-between gap-3 bg-[#0e172a] p-2.5 rounded-xl border border-slate-800">
+                <div key={n.id} className="flex items-center justify-between gap-3 bg-[#0f192b] p-3 rounded-2xl border border-slate-700">
                   <span className="text-white font-black text-xs w-20">{n.id}</span>
-                  <div className="flex-1 bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-700">
+                  <div className="flex-1 bg-slate-900 rounded-full h-3.5 overflow-hidden border border-slate-700">
                     <div 
                       className={`h-full rounded-full transition-all ${
                         (n.moisture || 40) >= 88 ? 'bg-red-500' : (n.moisture || 40) >= 70 ? 'bg-amber-400' : 'bg-cyan-400'

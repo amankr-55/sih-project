@@ -54,6 +54,7 @@ import { generateDGMSReport } from './utils/dgmsReportGenerator';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview'); 
+  const [themeMode, setThemeMode] = useState('dark');
   const [currentUser, setCurrentUser] = useState({
     id: 'USR-CHIEF-01',
     name: 'Aman Kumar (Chief Officer)',
@@ -335,12 +336,14 @@ export default function App() {
   }, [isAdmin, activeTab]);
 
   return (
-    <div className={`min-h-screen text-slate-100 flex flex-col font-sans relative transition-colors duration-500 ${
+    <div className={`min-h-screen ${
+      themeMode === 'light' ? 'bg-slate-200 text-slate-900' : 'bg-[#090f1f] text-slate-100'
+    } flex flex-col font-sans relative transition-colors duration-500 ${
       overallStatus === 'critical' ? 'ring-8 ring-inset ring-red-600/40' : ''
     }`}>
       
       {/* Animated Subterranean Particle Cyber Background */}
-      <CyberBackground />
+      {themeMode === 'dark' && <CyberBackground />}
       
       {/* Top Header with Brand, CMSI Radial Meter, User Profile & Logout */}
       <Header
@@ -354,6 +357,8 @@ export default function App() {
         onChangeShift={setCurrentShift}
         currentUser={currentUser}
         onLogout={handleLogout}
+        themeMode={themeMode}
+        onToggleTheme={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
       />
 
       {/* Tri-State Alarm Banner */}
