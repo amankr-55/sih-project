@@ -357,13 +357,15 @@ export default function App() {
       />
 
       {/* Tri-State Alarm Banner */}
-      <AlarmBanner
-        status={overallStatus}
-        maxTilt={maxTilt}
-        maxCrack={maxCrack}
-        maxCH4={maxCH4}
-        maxCO={maxCO}
-      />
+      <div className="relative z-10">
+        <AlarmBanner
+          status={overallStatus}
+          maxTilt={maxTilt}
+          maxCrack={maxCrack}
+          maxCH4={maxCH4}
+          maxCO={maxCO}
+        />
+      </div>
 
       {/* Modern High-Contrast Navigation Tab Bar */}
       <div className="bg-slate-950/80 border-b border-slate-800/90 sticky top-[76px] z-30 shadow-2xl backdrop-blur-xl">
@@ -390,7 +392,7 @@ export default function App() {
       </div>
 
       {/* Main Content Area based on Selected Tab */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
         
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
@@ -548,7 +550,7 @@ export default function App() {
       </main>
 
       {/* Footer bar */}
-      <footer className="bg-slate-950/90 border-t border-slate-800/80 py-4 px-6 text-center text-xs text-slate-400 backdrop-blur-lg">
+      <footer className="relative z-10 bg-slate-950/90 border-t border-slate-800/80 py-4 px-6 text-center text-xs text-slate-400 backdrop-blur-lg">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-black text-white">Team Green ThinkerX</span>

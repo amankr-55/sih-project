@@ -123,8 +123,7 @@ export default function CyberBackground() {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-0"
-      style={{ opacity: 0.95 }}
+      className="fixed inset-0 pointer-events-none -z-50"
     />
   );
 }
