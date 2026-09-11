@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ZoomIn, Download, Maximize2, ShieldCheck, MapPin } from 'lucide-react';
 
 export default function ImageLightboxModal({ isOpen, onClose, imageSrc, title, subtitle, location, badge }) {
@@ -18,9 +19,9 @@ export default function ImageLightboxModal({ isOpen, onClose, imageSrc, title, s
 
   if (!isOpen || !imageSrc) return null;
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-xl animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-xl animate-fade-in"
       onClick={onClose}
     >
       <div 
@@ -91,6 +92,7 @@ export default function ImageLightboxModal({ isOpen, onClose, imageSrc, title, s
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

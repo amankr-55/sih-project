@@ -546,6 +546,19 @@ export default function Earth3DExplorer() {
         </div>
       </div>
 
+      {/* Lightbox Modal */}
+      {lightboxData && (
+        <ImageLightboxModal
+          isOpen={!!lightboxData}
+          onClose={() => setLightboxData(null)}
+          imageSrc={lightboxData.image}
+          title={lightboxData.title}
+          subtitle={lightboxData.desc}
+          location={lightboxData.location}
+          badge={lightboxData.badge}
+        />
+      )}
+
     </div>
   );
 }
