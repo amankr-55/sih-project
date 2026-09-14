@@ -132,7 +132,10 @@ export default function App() {
         const tilt = typeof data.tilt === 'number' ? data.tilt : n.tiltX;
         const vib = typeof data.vibration === 'number' ? data.vibration : n.vibrationG;
         const crack = typeof data.crack === 'number' ? data.crack : n.crackDisplacement;
-        const temp = typeof data.temp === 'number' ? data.temp : n.temperature;
+        // MPU-6050 internal die runs ~19°C hotter than ambient room temperature
+        const temp = typeof data.temp === 'number' 
+          ? +(data.temp > 40 ? data.temp - 19.5 : data.temp).toFixed(1) 
+          : n.temperature;
         const status = data.status || n.status;
 
         return {
