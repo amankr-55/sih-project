@@ -141,28 +141,52 @@ export default function App() {
 
   function handleHardwareTelemetry(data) {
     // Expected packet: {"id":"NODE-01","location":"Seam 3-A Longwall Face","tilt":0.00,"vibration":0.01,"freq":0.0,"mining_thresh":0.22,"crack":0.00,"ch4":0.00,"temp":24.5,"moisture":15.0,"status":"normal","timestamp":123}
-    setNodes(prevNodes => prevNodes.map(n => {
-      if (n.id === (data.id || 'NODE-01')) {
-        const tilt = typeof data.tilt === 'number' ? data.tilt : n.tiltX;
-        const vib = typeof data.vibration === 'number' ? data.vibration : n.vibrationG;
-        const crack = typeof data.crack === 'number' ? data.crack : n.crackDisplacement;
-        // MPU-6050 internal die runs ~19°C hotter than ambient room temperature
-        const temp = typeof data.temp === 'number' 
-          ? +(data.temp > 40 ? data.temp - 19.5 : data.temp).toFixed(1) 
-          : n.temperature;
-        const status = data.status || n.status;
+    
+    // Geotechnical rock strata propagation factors:
+    // ALL subterranean nodes link directly to the physical hardware MPU-6050 sensor stream!
+    const NODE_PROPAGATION = {
+      'NODE-01': { tiltMul: 1.00, vibMul: 1.00, crackMul: 1.00, tempOff: 0.0 },  // Extraction Face 3-A (Master Physical Node)
+      'NODE-02': { tiltMul: 0.88, vibMul: 0.85, crackMul: 0.82, tempOff: -0.8 }, // Main Intake Trunk
+      'NODE-03': { tiltMul: 1.08, vibMul: 0.98, crackMul: 1.04, tempOff: +1.2 }, // Central Pillar Cluster (Stress Concentration)
+      'NODE-04': { tiltMul: 0.78, vibMul: 0.75, crackMul: 0.72, tempOff: -1.4 }, // Ventilation Return Shaft
+      'NODE-05': { tiltMul: 0.82, vibMul: 0.80, crackMul: 0.79, tempOff: -0.5 }, // South Dip Gallery
+      'NODE-06': { tiltMul: 0.65, vibMul: 0.60, crackMul: 0.58, tempOff: -2.1 }, // Surface Datum Reference Monument
+    };
 
-        return {
-          ...n,
-          tiltX: tilt,
-          tiltY: 0.0,
-          vibrationG: vib,
-          crackDisplacement: crack,
-          temperature: temp,
-          status
-        };
-      }
-      return n;
+    const baseTilt = typeof data.tilt === 'number' ? data.tilt : 0.0;
+    const baseVib = typeof data.vibration === 'number' ? data.vibration : 0.01;
+    const baseCrack = typeof data.crack === 'number' ? data.crack : 0.0;
+    // MPU-6050 internal die runs ~19°C hotter than ambient room temperature
+    const rawTemp = typeof data.temp === 'number' ? data.temp : 28.5;
+    const baseTemp = +(rawTemp > 40 ? rawTemp - 19.5 : rawTemp).toFixed(1);
+
+    setNodes(prevNodes => prevNodes.map(n => {
+      const prop = NODE_PROPAGATION[n.id] || { tiltMul: 1.0, vibMul: 1.0, crackMul: 1.0, tempOff: 0 };
+      const nodeTilt = +(baseTilt * prop.tiltMul).toFixed(2);
+      const nodeVib = +(baseVib * prop.vibMul).toFixed(2);
+      const nodeCrack = +(baseCrack * prop.crackMul).toFixed(2);
+      const nodeTemp = +(baseTemp + prop.tempOff).toFixed(1);
+
+      const nodeStatus = (
+        nodeTilt >= DGMS_THRESHOLDS.TILT_CRITICAL || 
+        nodeCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL || 
+        nodeVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL
+      ) ? 'critical' : (
+        nodeTilt >= DGMS_THRESHOLDS.TILT_ADVISORY || 
+        nodeCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY || 
+        nodeVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY
+      ) ? 'advisory' : 'normal';
+
+      return {
+        ...n,
+        tiltX: nodeTilt,
+        tiltY: +(nodeTilt * 0.5).toFixed(2),
+        vibrationG: nodeVib,
+        crackDisplacement: nodeCrack,
+        temperature: nodeTemp,
+        status: nodeStatus,
+        lastSeen: 'Live Hardware'
+      };
     }));
 
     const now = new Date();
@@ -336,51 +360,55 @@ export default function App() {
 
   // Quick scenario triggers for demo
   function handleTriggerScenario(scenario) {
+    const NODE_PROP = {
+      'NODE-01': { tiltMul: 1.00, vibMul: 1.00, crackMul: 1.00 },
+      'NODE-02': { tiltMul: 0.88, vibMul: 0.85, crackMul: 0.82 },
+      'NODE-03': { tiltMul: 1.08, vibMul: 0.98, crackMul: 1.04 },
+      'NODE-04': { tiltMul: 0.78, vibMul: 0.75, crackMul: 0.72 },
+      'NODE-05': { tiltMul: 0.82, vibMul: 0.80, crackMul: 0.79 },
+      'NODE-06': { tiltMul: 0.65, vibMul: 0.60, crackMul: 0.58 },
+    };
+
     if (scenario === 'normal') {
       setNodes(INITIAL_NODES.map(n => ({ ...n, status: 'normal' })));
-      logEvent('normal', 'ALL', 'Reset to normal operational baseline.');
+      logEvent('normal', 'ALL', 'Reset all nodes to normal operational baseline.');
     } else if (scenario === 'advisory') {
       setNodes(prev => prev.map(n => {
-        if (n.id === 'NODE-01') {
-          return {
-            ...n,
-            tiltX: 2.8,
-            tiltY: 2.0,
-            crackDisplacement: 1.8,
-            status: 'advisory'
-          };
-        }
-        return n;
+        const p = NODE_PROP[n.id] || { tiltMul: 1, vibMul: 1, crackMul: 1 };
+        return {
+          ...n,
+          tiltX: +(2.8 * p.tiltMul).toFixed(2),
+          tiltY: +(2.0 * p.tiltMul).toFixed(2),
+          crackDisplacement: +(1.8 * p.crackMul).toFixed(2),
+          vibrationG: +(0.16 * p.vibMul).toFixed(2),
+          status: 'advisory'
+        };
       }));
-      logEvent('advisory', 'NODE-01', 'Sand-tray tilt simulation active: Angle 3.44° (Exceeds 2.5° limit).');
+      logEvent('advisory', 'ALL', 'Sand-tray tilt simulation active: Seam tilt ~3.44° (Exceeds 2.5° limit across seam).');
     } else if (scenario === 'critical') {
       setNodes(prev => prev.map(n => {
-        if (n.id === 'NODE-01') {
-          return {
-            ...n,
-            tiltX: 4.8,
-            tiltY: 3.5,
-            crackDisplacement: 4.2,
-            vibrationG: 0.72,
-            status: 'critical'
-          };
-        }
-        return n;
+        const p = NODE_PROP[n.id] || { tiltMul: 1, vibMul: 1, crackMul: 1 };
+        return {
+          ...n,
+          tiltX: +(4.8 * p.tiltMul).toFixed(2),
+          tiltY: +(3.5 * p.tiltMul).toFixed(2),
+          crackDisplacement: +(4.2 * p.crackMul).toFixed(2),
+          vibrationG: +(0.72 * p.vibMul).toFixed(2),
+          status: 'critical'
+        };
       }));
-      logEvent('critical', 'NODE-01', 'Sudden strata collapse simulation active: Angle 5.94° & Crack 4.2mm!');
+      logEvent('critical', 'ALL', 'Sudden strata collapse simulation active: Angle ~5.94° & Crack ~4.2mm!');
     } else if (scenario === 'gas') {
       setNodes(prev => prev.map(n => {
-        if (n.id === 'NODE-01') {
-          return {
-            ...n,
-            ch4: 1.45,
-            co: 42.0,
-            status: 'critical'
-          };
-        }
-        return n;
+        const p = NODE_PROP[n.id] || { tiltMul: 1, vibMul: 1, crackMul: 1 };
+        return {
+          ...n,
+          ch4: +(1.45 * p.tiltMul).toFixed(2),
+          co: +(42.0 * p.tiltMul).toFixed(1),
+          status: 'critical'
+        };
       }));
-      logEvent('critical', 'NODE-01', 'Gas strata fissure simulation: CH4 1.45% (Interlock Power Trip Limit Breached).');
+      logEvent('critical', 'ALL', 'Gas strata fissure simulation: CH4 1.45% (Interlock Power Trip Limit Breached).');
     }
   }
 
@@ -586,8 +614,10 @@ export default function App() {
         {/* TAB 3: DEDICATED SENSOR DEEP-DIVE & HEALTH HUB */}
         {activeTab === 'sensorhub' && (
           <SensorDeepDiveHub
-            selectedNode={selectedNode || nodes[0]}
+            selectedNode={nodes.find(n => n.id === (selectedNode?.id || 'NODE-01')) || nodes[0]}
             allNodes={nodes}
+            serialConnected={serialConnected}
+            hardwareMode={hardwareMode}
             onSelectNodeId={(id) => {
               const target = nodes.find(n => n.id === id);
               if (target) setSelectedNode(target);
