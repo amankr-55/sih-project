@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Settings, 
   Usb, 
@@ -15,56 +15,24 @@ import {
 } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
-export default function SettingsSection({ onUpdateThresholds }) {
+export default function SettingsSection({ 
+  serialConnected = false, 
+  onConnectSerial, 
+  serialLogs = [], 
+  thresholds: propThresholds, 
+  onUpdateThresholds 
+}) {
   const [activeTab, setActiveTab] = useState('hardware'); // 'hardware', 'thresholds', 'lora', 'code'
   const [baudRate, setBaudRate] = useState('115200');
-  const [serialConnected, setSerialConnected] = useState(false);
-  const [serialLogs, setSerialLogs] = useState([
-    '[INIT] Web Serial Controller initialized.',
-    '[READY] Plug ESP32 Gateway to USB port (COM3/COM4). Click Connect.'
-  ]);
 
   // Local threshold states
-  const [thresholds, setThresholds] = useState({ ...DGMS_THRESHOLDS });
+  const [thresholds, setThresholds] = useState(propThresholds || { ...DGMS_THRESHOLDS });
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Web Serial API handler
-  async function handleConnectSerial() {
-    if ('serial' in navigator) {
-      try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: parseInt(baudRate, 10) });
-        setSerialConnected(true);
-        setSerialLogs(prev => [
-          ...prev, 
-          `[SUCCESS] Connected to USB Serial Port at ${baudRate} baud!`,
-          `[LORA] Listening for ESP32 Sub-GHz payload packets...`
-        ]);
-
-        // Start reading loop
-        const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-        const reader = textDecoder.readable.getReader();
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            reader.releaseLock();
-            break;
-          }
-          if (value) {
-            setSerialLogs(prev => [...prev.slice(-15), `[RX] ${value.trim()}`]);
-          }
-        }
-      } catch (err) {
-        setSerialLogs(prev => [...prev, `[ERROR] Serial Port: ${err.message}`]);
-      }
-    } else {
-      setSerialLogs(prev => [
-        ...prev,
-        `[NOTE] Web Serial requires Google Chrome or Microsoft Edge. Alternatively use local Python bridge.`
-      ]);
-      alert('Web Serial API is natively supported in Google Chrome, Microsoft Edge, and Opera!');
+  // Web Serial API caller delegates to the centralized app connection
+  function handleConnect() {
+    if (onConnectSerial) {
+      onConnectSerial();
     }
   }
 
@@ -176,7 +144,7 @@ export default function SettingsSection({ onUpdateThresholds }) {
             </div>
 
             <button
-              onClick={handleConnectSerial}
+              onClick={handleConnect}
               className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 serialConnected 
                   ? 'bg-emerald-600 text-white hover:bg-emerald-500' 

@@ -279,7 +279,10 @@ export function generateInitialChartHistory() {
     history.push({
       time: timeStr,
       tilt: +(0.8 + Math.sin(i * 0.4) * 0.15).toFixed(2),
+      vibration: +(0.04 + Math.abs(Math.sin(i * 0.6)) * 0.03).toFixed(2),
       crack: +(0.32 + Math.cos(i * 0.3) * 0.05).toFixed(2),
+      temp: +(28.5 + Math.sin(i * 0.1) * 0.8).toFixed(1),
+      freq: +(12.0 + Math.cos(i * 0.4) * 4.0).toFixed(1),
       ch4: +(0.22 + Math.sin(i * 0.2) * 0.03).toFixed(2),
       co: +(6.5 + Math.cos(i * 0.5) * 0.8).toFixed(1)
     });

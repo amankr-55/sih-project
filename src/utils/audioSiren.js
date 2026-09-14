@@ -1,4 +1,4 @@
-﻿// Web Audio API Synthesizer for Industrial Evacuation Siren and Alert Beeps
+// Web Audio API Synthesizer for Industrial Evacuation Siren and Alert Beeps
 class AudioSirenController {
   constructor() {
     this.audioCtx = null;
@@ -56,7 +56,6 @@ class AudioSirenController {
   }
 
   stopSiren() {
-    if (!this.isPlaying) return;
     this.isPlaying = false;
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -64,19 +63,16 @@ class AudioSirenController {
     }
     if (this.gainNode && this.audioCtx) {
       try {
-        this.gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.1);
-        setTimeout(() => {
-          if (this.oscillator) {
-            try { this.oscillator.stop(); this.oscillator.disconnect(); } catch (e) {}
-            this.oscillator = null;
-          }
-        }, 120);
-      } catch (e) {
-        if (this.oscillator) {
-          try { this.oscillator.stop(); } catch (err) {}
-          this.oscillator = null;
-        }
-      }
+        this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
+        this.gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
+      } catch (e) {}
+    }
+    if (this.oscillator) {
+      try {
+        this.oscillator.stop();
+        this.oscillator.disconnect();
+      } catch (e) {}
+      this.oscillator = null;
     }
   }
 

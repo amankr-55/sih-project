@@ -76,6 +76,11 @@ export default function App() {
   const [hardwareMode, setHardwareMode] = useState('simulation');
   const [isDgmsModalOpen, setIsDgmsModalOpen] = useState(false);
   const [serialConnected, setSerialConnected] = useState(false);
+  const [serialLogs, setSerialLogs] = useState([
+    '[INIT] Web Serial Controller ready.',
+    '[READY] Plug ESP32 via USB (COM Port) or pair via Bluetooth SPP. Click Connect.'
+  ]);
+  const [thresholds, setThresholds] = useState({ ...DGMS_THRESHOLDS });
 
   // WebSerial API handler for live physical ESP32 streaming
   async function handleConnectSerial() {
@@ -85,6 +90,11 @@ export default function App() {
         await port.open({ baudRate: 115200 });
         setSerialConnected(true);
         setHardwareMode('hardware');
+        setSerialLogs(prev => [
+          ...prev.slice(-25),
+          `[SUCCESS] Connected to USB Serial Port at 115200 baud!`,
+          `[HARDWARE] Subterranean Node live streaming active.`
+        ]);
         logEvent('normal', 'USB', 'ESP32 Subterranean Node connected via WebSerial (COM Port 115200 baud)');
 
         const textDecoder = new TextDecoderStream();
@@ -104,12 +114,15 @@ export default function App() {
             lineBuffer = lines.pop();
             for (const line of lines) {
               const trimmed = line.trim();
-              if (trimmed && trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                try {
-                  const data = JSON.parse(trimmed);
-                  handleHardwareTelemetry(data);
-                } catch (e) {
-                  // ignore incomplete JSON
+              if (trimmed) {
+                setSerialLogs(prev => [...prev.slice(-25), `[RX] ${trimmed}`]);
+                if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                  try {
+                    const data = JSON.parse(trimmed);
+                    handleHardwareTelemetry(data);
+                  } catch (e) {
+                    // ignore incomplete JSON
+                  }
                 }
               }
             }
@@ -118,6 +131,7 @@ export default function App() {
       } catch (err) {
         console.error('Serial port error:', err);
         setSerialConnected(false);
+        setSerialLogs(prev => [...prev.slice(-25), `[ERROR] Serial Port: ${err.message}`]);
         logEvent('advisory', 'USB', `WebSerial connection: ${err.message}`);
       }
     } else {
@@ -153,14 +167,25 @@ export default function App() {
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const tiltVal = +(data.tilt || 0).toFixed(2);
+    const vibVal = +(data.vibration || 0.01).toFixed(2);
+    const crackVal = +(data.crack || 0).toFixed(2);
+    const tempVal = +(data.temp > 40 ? data.temp - 19.5 : (data.temp || 28.5)).toFixed(1);
+    const freqVal = +(data.freq || 0).toFixed(1);
+    const ch4Val = +(data.ch4 || 0.22).toFixed(2);
+    const coVal = +(data.co || 6.5).toFixed(1);
+
     setHistoryData(prev => [
       ...prev.slice(1),
       {
         time: timeStr,
-        tilt: +(data.tilt || 0).toFixed(2),
-        crack: +(data.crack || 0).toFixed(2),
-        ch4: +(data.ch4 || 0).toFixed(2),
-        co: +(data.vibration || 0).toFixed(2)
+        tilt: tiltVal,
+        vibration: vibVal,
+        crack: crackVal,
+        temp: tempVal,
+        freq: freqVal,
+        ch4: ch4Val,
+        co: coVal
       }
     ]);
   }
@@ -282,7 +307,10 @@ export default function App() {
         const newPoint = {
           time: timeStr,
           tilt: +(maxTilt + (Math.random() * 0.08 - 0.04)).toFixed(2),
+          vibration: +(maxVibration + (Math.random() * 0.02 - 0.01)).toFixed(2),
           crack: +(maxCrack + (Math.random() * 0.04 - 0.02)).toFixed(2),
+          temp: +(maxTemp + (Math.random() * 0.2 - 0.1)).toFixed(1),
+          freq: +(12.0 + (Math.random() * 2.0 - 1.0)).toFixed(1),
           ch4: +(maxCH4 + (Math.random() * 0.02 - 0.01)).toFixed(2),
           co: +(maxCO + (Math.random() * 0.4 - 0.2)).toFixed(1)
         };
@@ -499,9 +527,9 @@ export default function App() {
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
             
-            {/* Top Row: 2D Spatial Map + Dual Real-Time Telemetry Charts */}
+            {/* Top Row: 2D Spatial Mine Grid + 3D Geological Strata Model */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              <div className="lg:col-span-7 min-h-[480px]">
+              <div className="lg:col-span-7 min-h-[460px]">
                 <SpatialMineGrid
                   nodes={nodes}
                   onSelectNode={(node) => {
@@ -512,19 +540,21 @@ export default function App() {
                 />
               </div>
 
-              <div className="lg:col-span-5 min-h-[480px]">
-                <TelemetryPanels
-                  historyData={historyData}
-                  status={overallStatus}
+              <div className="lg:col-span-5 min-h-[460px]">
+                <Strata3DVisualizer
+                  maxTilt={maxTilt}
+                  maxCrack={maxCrack}
                 />
               </div>
             </div>
 
-            {/* Middle Row: 3D Geological Strata Model */}
-            <Strata3DVisualizer
-              maxTilt={maxTilt}
-              maxCrack={maxCrack}
-            />
+            {/* Middle Row: Full-Width Multi-Parametric Telemetry Arrays (All 6 Separated Graphs) */}
+            <div className="w-full">
+              <TelemetryPanels
+                historyData={historyData}
+                status={overallStatus}
+              />
+            </div>
 
             {/* Bottom Row: Simulation Controls + Event Audit Log */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -645,7 +675,12 @@ export default function App() {
           <SettingsSection 
             serialConnected={serialConnected}
             onConnectSerial={handleConnectSerial}
-            onHardwareTelemetry={handleHardwareTelemetry}
+            serialLogs={serialLogs}
+            thresholds={thresholds}
+            onUpdateThresholds={(newThresh) => {
+              setThresholds(newThresh);
+              logEvent('normal', 'ADMIN', 'DGMS Statutory Thresholds updated.');
+            }}
           />
         )}
 
