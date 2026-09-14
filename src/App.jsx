@@ -204,7 +204,12 @@ export default function App() {
   let maxMoisture = 0;
   let maxTemp = 0;
 
-  nodes.forEach(n => {
+  // In hardware mode, evaluate exclusively NODE-01 (the physical device)
+  const activeNodesForStatus = hardwareMode === 'hardware'
+    ? nodes.filter(n => n.id === 'NODE-01')
+    : nodes;
+
+  activeNodesForStatus.forEach(n => {
     const totalTilt = Math.sqrt(n.tiltX * n.tiltX + n.tiltY * n.tiltY);
     if (totalTilt > maxTilt) maxTilt = totalTilt;
     if (n.crackDisplacement > maxCrack) maxCrack = n.crackDisplacement;
@@ -218,39 +223,37 @@ export default function App() {
   const overallStatus = 
     maxTilt >= DGMS_THRESHOLDS.TILT_CRITICAL || 
     maxCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL || 
-    maxCH4 >= DGMS_THRESHOLDS.CH4_POWER_TRIP || 
-    maxCO >= DGMS_THRESHOLDS.CO_CRITICAL ||
     maxVibration >= DGMS_THRESHOLDS.VIBRATION_CRITICAL ||
-    maxMoisture >= DGMS_THRESHOLDS.MOISTURE_CRITICAL ||
-    maxTemp >= 45.0
+    (hardwareMode !== 'hardware' && (
+      maxCH4 >= DGMS_THRESHOLDS.CH4_POWER_TRIP || 
+      maxCO >= DGMS_THRESHOLDS.CO_CRITICAL ||
+      maxMoisture >= DGMS_THRESHOLDS.MOISTURE_CRITICAL ||
+      maxTemp >= 48.0
+    ))
       ? 'critical'
       : maxTilt >= DGMS_THRESHOLDS.TILT_ADVISORY || 
         maxCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY || 
-        maxCH4 >= DGMS_THRESHOLDS.CH4_ADVISORY || 
-        maxCO >= DGMS_THRESHOLDS.CO_ADVISORY ||
-        maxVibration >= DGMS_THRESHOLDS.VIBRATION_ADVISORY ||
-        maxMoisture >= DGMS_THRESHOLDS.MOISTURE_ADVISORY ||
-        maxTemp >= DGMS_THRESHOLDS.TEMP_ADVISORY
+        maxVibration >= DGMS_THRESHOLDS.VIBRATION_ADVISORY
       ? 'advisory'
       : 'normal';
 
-  // Automated siren trigger on critical status
-  const prevStatusRef = useRef(overallStatus);
+  // Automated siren trigger: starts on critical, and AUTOMATICALLY stops as soon as normal/advisory
   useEffect(() => {
-    if (overallStatus === 'critical' && prevStatusRef.current !== 'critical') {
-      sirenEngine.startSiren();
-      setIsSirenActive(true);
-      logEvent('CRITICAL', 'NODE-01', 'CRITICAL STRATA RUPTURE DETECTED - AUTOMATED EVACUATION ENGAGED');
-    } else if (overallStatus === 'advisory' && prevStatusRef.current === 'normal') {
-      sirenEngine.playAdvisoryChime();
-      logEvent('advisory', 'NODE-01', 'Strata parameter exceeded advisory threshold. Safety inspection advisory.');
-    } else if (overallStatus === 'normal' && prevStatusRef.current === 'critical') {
-      sirenEngine.stopSiren();
-      setIsSirenActive(false);
-      logEvent('normal', 'SYS', 'All underground workings restored to stable statutory limits.');
+    if (overallStatus === 'critical') {
+      if (!isSirenActive) {
+        sirenEngine.startSiren();
+        setIsSirenActive(true);
+        logEvent('critical', 'NODE-01', 'CRITICAL STRATA RUPTURE DETECTED - AUTOMATED EVACUATION ENGAGED');
+      }
+    } else {
+      // Auto-silence whenever readings return to safe/advisory
+      if (isSirenActive) {
+        sirenEngine.stopSiren();
+        setIsSirenActive(false);
+        logEvent('normal', 'SYS', 'Working strata stabilized - Emergency siren silenced automatically.');
+      }
     }
-    prevStatusRef.current = overallStatus;
-  }, [overallStatus]);
+  }, [overallStatus, isSirenActive]);
 
   function logEvent(severity, nodeId, message) {
     const now = new Date();

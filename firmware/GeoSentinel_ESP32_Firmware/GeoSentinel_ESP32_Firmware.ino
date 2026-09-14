@@ -24,13 +24,13 @@
 
 // ================= DGMS & MINING SAFETY THRESHOLDS =================
 // Normal mining machinery & continuous drill vibration limit:
-const float MINING_MAX_MACHINERY_VIB = 0.22; // g-force (Normal mining ambient)
+const float MINING_MAX_MACHINERY_VIB = 0.18; // g-force (Normal mining ambient)
 
 // Genuine Strata Rupture / Seismic Shock Thresholds:
-const float THRESH_TILT_ADVISORY     = 2.50; // degrees
-const float THRESH_TILT_CRITICAL     = 4.50; // degrees
-const float THRESH_VIB_CRITICAL      = 0.42; // g-force (Exceeds mining baseline)
-const float THRESH_CRACK_CRITICAL    = 2.00; // mm
+const float THRESH_TILT_ADVISORY     = 2.20; // degrees
+const float THRESH_TILT_CRITICAL     = 3.80; // degrees
+const float THRESH_VIB_CRITICAL      = 0.35; // g-force (Exceeds mining baseline)
+const float THRESH_CRACK_CRITICAL    = 1.50; // mm
 
 // MPU-6050 I2C Configuration
 const int MPU_ADDR = 0x68;
@@ -49,9 +49,20 @@ float currentFrequencyHz = 0.0;
 unsigned long lastTelemetryTime = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 250;
 
-// Buzzer Non-Blocking Safety Timer (Prevents GPIO overheating)
+// Buzzer Non-Blocking Safety Timer
 unsigned long buzzerBeepUntil = 0;
 unsigned long nextAllowedBeep = 0;
+
+// Dual Active/Passive Buzzer Actuator
+void buzzerOn() {
+  tone(PIN_ALARM_BUZZER, 2500);
+  digitalWrite(PIN_ALARM_BUZZER, HIGH);
+}
+
+void buzzerOff() {
+  noTone(PIN_ALARM_BUZZER);
+  digitalWrite(PIN_ALARM_BUZZER, LOW);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -88,10 +99,14 @@ void setup() {
     }
   }
 
-  // Quick 100ms startup confirmation beep
-  digitalWrite(PIN_ALARM_BUZZER, HIGH);
-  delay(100);
-  digitalWrite(PIN_ALARM_BUZZER, LOW);
+  // 2 crisp startup confirmation beeps (verifies buzzer hardware immediately!)
+  buzzerOn();
+  delay(120);
+  buzzerOff();
+  delay(80);
+  buzzerOn();
+  delay(120);
+  buzzerOff();
 
   // ================= AUTO-ZERO CALIBRATION =================
   // Samples table rest position for 1.2 seconds to set 0.00° baseline
@@ -205,26 +220,26 @@ void loop() {
 
   String status = isCritical ? "critical" : (isAdvisory ? "advisory" : "normal");
 
-  // 6. Safe Non-Blocking Buzzer Pulse
+  // 6. Audible & Safe Non-Blocking Buzzer Pulse (Dual Active/Passive tone support)
   if (isCritical) {
-    // Rapid urgent pulse (40ms on, 60ms off) - Extremely low current (<4mA average)
+    // Rapid urgent pulse (180ms ON, 120ms OFF) - Loud and distinctive!
     if (now >= nextAllowedBeep) {
-      digitalWrite(PIN_ALARM_BUZZER, HIGH);
-      buzzerBeepUntil = now + 40;
-      nextAllowedBeep = now + 120;
+      buzzerOn();
+      buzzerBeepUntil = now + 180;
+      nextAllowedBeep = now + 300;
     }
   } else if (isAdvisory) {
-    // Single gentle beep every 2.5 seconds
+    // Single gentle beep every 2 seconds
     if (now >= nextAllowedBeep) {
-      digitalWrite(PIN_ALARM_BUZZER, HIGH);
-      buzzerBeepUntil = now + 30;
-      nextAllowedBeep = now + 2500;
+      buzzerOn();
+      buzzerBeepUntil = now + 140;
+      nextAllowedBeep = now + 2000;
     }
   }
 
-  // Turn off buzzer once pulse finishes
-  if (now >= buzzerBeepUntil) {
-    digitalWrite(PIN_ALARM_BUZZER, LOW);
+  // Turn off buzzer once pulse finishes or when normal
+  if (now >= buzzerBeepUntil || (!isCritical && !isAdvisory)) {
+    buzzerOff();
   }
 
   // 7. Output High-Speed Live JSON Stream (Every 250ms)
