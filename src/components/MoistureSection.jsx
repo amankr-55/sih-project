@@ -4,10 +4,18 @@ import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 import { getAssetUrl } from '../utils/assetHelper';
 import ImageLightboxModal from './ImageLightboxModal';
 
-export default function MoistureSection({ nodes }) {
-  const [selectedNodeId, setSelectedNodeId] = useState('NODE-01');
+export default function MoistureSection({ 
+  nodes,
+  selectedNodeId: propSelectedNodeId = 'NODE-01',
+  onSelectNodeId
+}) {
+  const [selectedNodeId, setSelectedNodeId] = useState(propSelectedNodeId || 'NODE-01');
   const [lightboxData, setLightboxData] = useState(null);
   const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (propSelectedNodeId) setSelectedNodeId(propSelectedNodeId);
+  }, [propSelectedNodeId]);
 
   const activeNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
   const moisturePct = activeNode.moisture || 42.5;
@@ -110,7 +118,10 @@ export default function MoistureSection({ nodes }) {
           <span className="text-sm text-white font-black">Select Seam Probe:</span>
           <select
             value={selectedNodeId}
-            onChange={(e) => setSelectedNodeId(e.target.value)}
+            onChange={(e) => {
+              setSelectedNodeId(e.target.value);
+              if (onSelectNodeId) onSelectNodeId(e.target.value);
+            }}
             className="bg-[#16233d] text-cyan-300 font-mono text-sm font-black border border-cyan-500/50 px-4 py-2 rounded-xl outline-none cursor-pointer shadow-md"
           >
             {nodes.map(n => (

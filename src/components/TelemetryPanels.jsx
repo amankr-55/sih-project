@@ -54,7 +54,13 @@ const ControlRoomTooltip = ({ active, payload, label, unit = '' }) => {
   return null;
 };
 
-export default function TelemetryPanels({ historyData, status }) {
+export default function TelemetryPanels({ 
+  historyData, 
+  status,
+  serialConnected = false,
+  isSimStreamActive = false,
+  onToggleSimStream
+}) {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'focused'
   const [selectedMetric, setSelectedMetric] = useState('tilt'); // 'tilt', 'vibration', 'crack', 'temp', 'freq', 'gas'
 
@@ -73,6 +79,8 @@ export default function TelemetryPanels({ historyData, status }) {
   const maxVibInWindow = Math.max(...historyData.map(d => d.vibration || 0), 0);
   const maxCrackInWindow = Math.max(...historyData.map(d => d.crack || 0), 0);
   const maxTempInWindow = Math.max(...historyData.map(d => d.temp || 0), 0);
+  const maxFreqInWindow = Math.max(...historyData.map(d => d.freq || 0), 0);
+  const maxCH4InWindow = Math.max(...historyData.map(d => d.ch4 || 0), 0);
 
   return (
     <div className="flex flex-col gap-4 h-full animate-fade-in">
@@ -96,6 +104,36 @@ export default function TelemetryPanels({ historyData, status }) {
               High-frequency real-time physical telemetry segregated by parameter
             </p>
           </div>
+        </div>
+
+        {/* Hardware Status / Simulation Stream Controller */}
+        <div className="flex flex-wrap items-center gap-2">
+          {serialConnected ? (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-mono text-xs font-bold shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+              🟢 SENSOR CONNECTED (LIVE 115200 BAUD)
+            </span>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-400 font-mono text-xs font-bold">
+                <span className="w-2 h-2 rounded-full bg-slate-500" />
+                SENSOR NOT CONNECTED • GRAPHS PAUSED
+              </span>
+              {onToggleSimStream && (
+                <button
+                  onClick={onToggleSimStream}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-black transition-all cursor-pointer shadow-md ${
+                    isSimStreamActive
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30 animate-pulse'
+                      : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40'
+                  }`}
+                  title={isSimStreamActive ? 'Pause synthetic simulation data' : 'Run synthetic simulation stream for testing'}
+                >
+                  <span>{isSimStreamActive ? '⏸️ PAUSE SIMULATION' : '▶️ TEST WITH SIMULATION'}</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* View Layout Toggle */}
@@ -147,7 +185,7 @@ export default function TelemetryPanels({ historyData, status }) {
                 <div className={`text-base font-black ${currentTilt >= DGMS_THRESHOLDS.TILT_CRITICAL ? 'text-red-400 animate-pulse' : currentTilt >= DGMS_THRESHOLDS.TILT_ADVISORY ? 'text-amber-400' : 'text-cyan-400'}`}>
                   {currentTilt}°
                 </div>
-                <div className="text-[10px] text-slate-400">Max: {maxTiltInWindow.toFixed(2)}°</div>
+                <div className="text-[10px] text-amber-300 font-bold">Peak: {maxTiltInWindow.toFixed(2)}° | Cutoff: 3.8°</div>
               </div>
             </div>
 
@@ -165,16 +203,16 @@ export default function TelemetryPanels({ historyData, status }) {
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 'dataMax + 1']} />
                   <Tooltip content={<ControlRoomTooltip unit="°" />} />
                   <ReferenceLine y={DGMS_THRESHOLDS.TILT_ADVISORY} stroke="#f59e0b" strokeDasharray="3 3" />
-                  <ReferenceLine y={DGMS_THRESHOLDS.TILT_CRITICAL} stroke="#ef4444" strokeDasharray="3 3" />
+                  <ReferenceLine y={DGMS_THRESHOLDS.TILT_CRITICAL} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: '⛔ DANGER >3.8°', fill: '#ef4444', fontSize: 9, position: 'insideTopRight' }} />
                   <Area type="monotone" dataKey="tilt" name="Tilt (°)" stroke="#38bdf8" strokeWidth={2} fillOpacity={1} fill="url(#tiltGrad)" dot={false} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-800 pt-2 mt-2">
-              <span className="text-slate-400">DGMS Limit: 2.5° / 5.0°</span>
-              <span className={`px-2 py-0.5 rounded font-bold ${currentTilt >= DGMS_THRESHOLDS.TILT_CRITICAL ? 'bg-red-950 text-red-300' : currentTilt >= DGMS_THRESHOLDS.TILT_ADVISORY ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
-                {currentTilt >= DGMS_THRESHOLDS.TILT_CRITICAL ? 'CRITICAL' : currentTilt >= DGMS_THRESHOLDS.TILT_ADVISORY ? 'ADVISORY' : 'NORMAL'}
+              <span className="text-slate-400">DGMS Limit: 2.5° / 3.8°</span>
+              <span className={`px-2 py-0.5 rounded font-bold ${currentTilt >= DGMS_THRESHOLDS.TILT_CRITICAL ? 'bg-red-950 text-red-300 animate-pulse' : currentTilt >= DGMS_THRESHOLDS.TILT_ADVISORY ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
+                {currentTilt >= DGMS_THRESHOLDS.TILT_CRITICAL ? '🚨 DANGER EXCEEDED' : currentTilt >= DGMS_THRESHOLDS.TILT_ADVISORY ? 'ADVISORY' : 'NORMAL'}
               </span>
             </div>
           </div>
@@ -195,7 +233,7 @@ export default function TelemetryPanels({ historyData, status }) {
                 <div className={`text-base font-black ${currentVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL ? 'text-red-400 animate-pulse' : currentVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY ? 'text-amber-400' : 'text-purple-400'}`}>
                   {currentVib} g
                 </div>
-                <div className="text-[10px] text-slate-400">Max: {maxVibInWindow.toFixed(2)} g</div>
+                <div className="text-[10px] text-amber-300 font-bold">Peak: {maxVibInWindow.toFixed(2)} g | Cutoff: 0.35g</div>
               </div>
             </div>
 
@@ -213,16 +251,16 @@ export default function TelemetryPanels({ historyData, status }) {
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 'dataMax + 0.2']} />
                   <Tooltip content={<ControlRoomTooltip unit="g" />} />
                   <ReferenceLine y={DGMS_THRESHOLDS.VIBRATION_ADVISORY} stroke="#f59e0b" strokeDasharray="3 3" />
-                  <ReferenceLine y={DGMS_THRESHOLDS.VIBRATION_CRITICAL} stroke="#ef4444" strokeDasharray="3 3" />
+                  <ReferenceLine y={DGMS_THRESHOLDS.VIBRATION_CRITICAL} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: '⛔ DANGER >0.35g (ROCKBURST)', fill: '#ef4444', fontSize: 9, position: 'insideTopRight' }} />
                   <Area type="monotone" dataKey="vibration" name="Vibration (g)" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#vibGrad)" dot={false} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-800 pt-2 mt-2">
-              <span className="text-slate-400">Drill Limit: 0.22g</span>
-              <span className={`px-2 py-0.5 rounded font-bold ${currentVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL ? 'bg-red-950 text-red-300' : currentVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
-                {currentVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL ? 'CRITICAL' : currentVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY ? 'ADVISORY' : 'NORMAL'}
+              <span className="text-slate-400">Drill: 0.22g | Danger: &gt;0.35g</span>
+              <span className={`px-2 py-0.5 rounded font-bold ${currentVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL ? 'bg-red-950 text-red-300 animate-pulse' : currentVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
+                {currentVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL ? '🚨 DANGER EXCEEDED' : currentVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY ? 'ADVISORY' : 'NORMAL'}
               </span>
             </div>
           </div>
@@ -243,7 +281,7 @@ export default function TelemetryPanels({ historyData, status }) {
                 <div className={`text-base font-black ${currentCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL ? 'text-red-400 animate-pulse' : currentCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY ? 'text-amber-400' : 'text-amber-400'}`}>
                   {currentCrack} mm
                 </div>
-                <div className="text-[10px] text-slate-400">Max: {maxCrackInWindow.toFixed(2)} mm</div>
+                <div className="text-[10px] text-amber-300 font-bold">Peak: {maxCrackInWindow.toFixed(2)} mm | Cutoff: 4.0mm</div>
               </div>
             </div>
 
@@ -261,7 +299,7 @@ export default function TelemetryPanels({ historyData, status }) {
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 'dataMax + 0.5']} />
                   <Tooltip content={<ControlRoomTooltip unit="mm" />} />
                   <ReferenceLine y={DGMS_THRESHOLDS.CRACK_ADVISORY} stroke="#f59e0b" strokeDasharray="3 3" />
-                  <ReferenceLine y={DGMS_THRESHOLDS.CRACK_CRITICAL} stroke="#ef4444" strokeDasharray="3 3" />
+                  <ReferenceLine y={DGMS_THRESHOLDS.CRACK_CRITICAL} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: '⛔ DANGER >4.0mm', fill: '#ef4444', fontSize: 9, position: 'insideTopRight' }} />
                   <Area type="monotone" dataKey="crack" name="Crack (mm)" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#crackGrad)" dot={false} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -269,8 +307,8 @@ export default function TelemetryPanels({ historyData, status }) {
 
             <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-800 pt-2 mt-2">
               <span className="text-slate-400">DGMS Limit: 2.0 / 4.0 mm</span>
-              <span className={`px-2 py-0.5 rounded font-bold ${currentCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL ? 'bg-red-950 text-red-300' : currentCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
-                {currentCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL ? 'CRITICAL' : currentCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY ? 'ADVISORY' : 'NORMAL'}
+              <span className={`px-2 py-0.5 rounded font-bold ${currentCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL ? 'bg-red-950 text-red-300 animate-pulse' : currentCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
+                {currentCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL ? '🚨 DANGER EXCEEDED' : currentCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY ? 'ADVISORY' : 'NORMAL'}
               </span>
             </div>
           </div>
@@ -288,10 +326,10 @@ export default function TelemetryPanels({ historyData, status }) {
                 </div>
               </div>
               <div className="text-right font-mono">
-                <div className="text-base font-black text-rose-400">
+                <div className={`text-base font-black ${currentTemp >= 45 ? 'text-red-400 animate-pulse' : currentTemp >= 38 ? 'text-amber-400' : 'text-rose-400'}`}>
                   {currentTemp}°C
                 </div>
-                <div className="text-[10px] text-slate-400">Max: {maxTempInWindow.toFixed(1)}°C</div>
+                <div className="text-[10px] text-amber-300 font-bold">Peak: {maxTempInWindow.toFixed(1)}°C | Cutoff: 45°C</div>
               </div>
             </div>
 
@@ -309,15 +347,16 @@ export default function TelemetryPanels({ historyData, status }) {
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[20, 'dataMax + 5']} />
                   <Tooltip content={<ControlRoomTooltip unit="°C" />} />
                   <ReferenceLine y={DGMS_THRESHOLDS.TEMP_ADVISORY} stroke="#f59e0b" strokeDasharray="3 3" />
+                  <ReferenceLine y={45.0} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: '⛔ DANGER >45°C (FIRE)', fill: '#ef4444', fontSize: 9, position: 'insideTopRight' }} />
                   <Area type="monotone" dataKey="temp" name="Temp (°C)" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#tempGrad)" dot={false} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-800 pt-2 mt-2">
-              <span className="text-slate-400">DGMS Limit: 38.0°C</span>
-              <span className={`px-2 py-0.5 rounded font-bold ${currentTemp >= 38 ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
-                {currentTemp >= 38 ? 'ELEVATED' : 'STABLE'}
+              <span className="text-slate-400">DGMS Limit: 38.0°C / 45.0°C</span>
+              <span className={`px-2 py-0.5 rounded font-bold ${currentTemp >= 45 ? 'bg-red-950 text-red-300 animate-pulse' : currentTemp >= 38 ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
+                {currentTemp >= 45 ? '🚨 DANGER: FIRE RISK' : currentTemp >= 38 ? 'ELEVATED' : 'STABLE'}
               </span>
             </div>
           </div>
@@ -335,10 +374,10 @@ export default function TelemetryPanels({ historyData, status }) {
                 </div>
               </div>
               <div className="text-right font-mono">
-                <div className="text-base font-black text-emerald-400">
+                <div className={`text-base font-black ${currentFreq >= 20.0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
                   {currentFreq} Hz
                 </div>
-                <div className="text-[10px] text-slate-400">Acoustic Peak</div>
+                <div className="text-[10px] text-amber-300 font-bold">Peak: {maxFreqInWindow.toFixed(1)} Hz | Cutoff: 20Hz</div>
               </div>
             </div>
 
@@ -355,15 +394,16 @@ export default function TelemetryPanels({ historyData, status }) {
                   <XAxis dataKey="time" stroke="#64748b" fontSize={9} tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 'dataMax + 10']} />
                   <Tooltip content={<ControlRoomTooltip unit="Hz" />} />
+                  <ReferenceLine y={20.0} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: '⛔ DANGER >20Hz (ROCKBURST)', fill: '#ef4444', fontSize: 9, position: 'insideTopRight' }} />
                   <Area type="monotone" dataKey="freq" name="Freq (Hz)" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#freqGrad)" dot={false} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-800 pt-2 mt-2">
-              <span className="text-slate-400">Band: 0 - 50 Hz</span>
-              <span className="px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300">
-                ACTIVE
+              <span className="text-slate-400">Cutoff: &gt;20.0 Hz</span>
+              <span className={`px-2 py-0.5 rounded font-bold ${currentFreq >= 20 ? 'bg-red-950 text-red-300 animate-pulse' : 'bg-emerald-950 text-emerald-300'}`}>
+                {currentFreq >= 20 ? '🚨 DANGER: BURST HARMONIC' : 'ACTIVE RESONANCE'}
               </span>
             </div>
           </div>
@@ -381,10 +421,10 @@ export default function TelemetryPanels({ historyData, status }) {
                 </div>
               </div>
               <div className="text-right font-mono">
-                <div className="text-base font-black text-blue-400">
+                <div className={`text-base font-black ${currentCH4 >= DGMS_THRESHOLDS.CH4_POWER_TRIP ? 'text-red-400 animate-pulse' : 'text-blue-400'}`}>
                   {currentCH4}% | {currentCO} ppm
                 </div>
-                <div className="text-[10px] text-slate-400">Ventilation Normal</div>
+                <div className="text-[10px] text-amber-300 font-bold">Peak: {maxCH4InWindow.toFixed(2)}% | Cutoff: 1.25%</div>
               </div>
             </div>
 
@@ -395,7 +435,7 @@ export default function TelemetryPanels({ historyData, status }) {
                   <XAxis dataKey="time" stroke="#64748b" fontSize={9} tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 'dataMax + 2']} />
                   <Tooltip content={<ControlRoomTooltip />} />
-                  <ReferenceLine y={DGMS_THRESHOLDS.CH4_POWER_TRIP} stroke="#ef4444" strokeDasharray="3 3" />
+                  <ReferenceLine y={DGMS_THRESHOLDS.CH4_POWER_TRIP} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: '⛔ DANGER >1.25% (POWER TRIP)', fill: '#ef4444', fontSize: 9, position: 'insideTopRight' }} />
                   <Line type="monotone" dataKey="ch4" name="CH4 (% vol)" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="co" name="CO (ppm)" stroke="#818cf8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                 </LineChart>
@@ -404,8 +444,8 @@ export default function TelemetryPanels({ historyData, status }) {
 
             <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-800 pt-2 mt-2">
               <span className="text-slate-400">Trip: 1.25% CH4</span>
-              <span className="px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300">
-                INTERLOCK SAFE
+              <span className={`px-2 py-0.5 rounded font-bold ${currentCH4 >= DGMS_THRESHOLDS.CH4_POWER_TRIP ? 'bg-red-950 text-red-300 animate-pulse' : 'bg-emerald-950 text-emerald-300'}`}>
+                {currentCH4 >= DGMS_THRESHOLDS.CH4_POWER_TRIP ? '🚨 POWER TRIP ENGAGED' : 'INTERLOCK SAFE'}
               </span>
             </div>
           </div>

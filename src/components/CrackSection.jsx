@@ -4,10 +4,19 @@ import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 import { getAssetUrl } from '../utils/assetHelper';
 import ImageLightboxModal from './ImageLightboxModal';
 
-export default function CrackSection({ nodes, maxCrack }) {
-  const [selectedNodeId, setSelectedNodeId] = useState('NODE-01');
+export default function CrackSection({ 
+  nodes, 
+  maxCrack,
+  selectedNodeId: propSelectedNodeId = 'NODE-01',
+  onSelectNodeId
+}) {
+  const [selectedNodeId, setSelectedNodeId] = useState(propSelectedNodeId || 'NODE-01');
   const [viewMode, setViewMode] = useState('real'); // 'real' | 'thermal'
   const [lightboxData, setLightboxData] = useState(null);
+
+  React.useEffect(() => {
+    if (propSelectedNodeId) setSelectedNodeId(propSelectedNodeId);
+  }, [propSelectedNodeId]);
   const activeNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
 
   const isCriticalCrack = activeNode.crackDisplacement >= DGMS_THRESHOLDS.CRACK_CRITICAL;
@@ -56,7 +65,10 @@ export default function CrackSection({ nodes, maxCrack }) {
           <span className="text-sm font-black text-white">Inspect Station:</span>
           <select
             value={selectedNodeId}
-            onChange={(e) => setSelectedNodeId(e.target.value)}
+            onChange={(e) => {
+              setSelectedNodeId(e.target.value);
+              if (onSelectNodeId) onSelectNodeId(e.target.value);
+            }}
             className="bg-[#16233d] text-amber-300 font-mono text-sm font-black border border-amber-500/50 px-4 py-2 rounded-xl outline-none cursor-pointer shadow-md"
           >
             {nodes.map(n => (

@@ -8,6 +8,7 @@ import EventLog from './components/EventLog';
 import Earth3DExplorer from './components/Earth3DExplorer';
 import SensorDeepDiveHub from './components/SensorDeepDiveHub';
 import DgmsReportModal from './components/DgmsReportModal';
+import ThemeCustomizerModal from './components/ThemeCustomizerModal';
 
 // Dedicated Sensor & Analytics Sections
 import TemperatureSection from './components/TemperatureSection';
@@ -69,7 +70,13 @@ export default function App() {
 
   const [nodes, setNodes] = useState(INITIAL_NODES);
   const [historyData, setHistoryData] = useState(generateInitialChartHistory());
-  const [selectedNode, setSelectedNode] = useState(INITIAL_NODES[0]);
+  const [selectedNodeId, setSelectedNodeId] = useState('NODE-01');
+  const [dashboardTheme, setDashboardTheme] = useState('cyber');
+  const [fontTheme, setFontTheme] = useState('inter');
+  const [effect3DTheme, setEffect3DTheme] = useState('sensor-sync');
+  const [isThemeCustomizerOpen, setIsThemeCustomizerOpen] = useState(false);
+  const [isSimStreamActive, setIsSimStreamActive] = useState(false);
+  const activeSelectedNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
   const [isSirenActive, setIsSirenActive] = useState(false);
   const [currentShift, setCurrentShift] = useState('Shift-A');
   const [activeMiners, setActiveMiners] = useState(48);
@@ -319,9 +326,9 @@ export default function App() {
     setEvents(prev => [newEvt, ...prev.slice(0, 49)]);
   }
 
-  // Periodic subtle jitter / streaming data tick (Only active in simulation mode)
+  // Periodic subtle jitter / streaming data tick (ONLY active if user explicitly clicks "Test with Simulation", and sensor is not connected)
   useEffect(() => {
-    if (hardwareMode === 'hardware') return;
+    if (serialConnected || !isSimStreamActive) return;
 
     const interval = setInterval(() => {
       setHistoryData(prevHistory => {
@@ -343,7 +350,7 @@ export default function App() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [maxTilt, maxCrack, maxCH4, maxCO, hardwareMode]);
+  }, [maxTilt, maxCrack, maxCH4, maxCO, serialConnected, isSimStreamActive]);
 
   // Siren toggle handler
   function handleToggleSiren() {
@@ -485,10 +492,30 @@ export default function App() {
     }
   }, [isAdmin, activeTab]);
 
+  const fontClass = fontTheme === 'mono' 
+    ? 'font-theme-mono'
+    : fontTheme === 'orbitron'
+    ? 'font-theme-orbitron'
+    : fontTheme === 'roboto'
+    ? 'font-theme-roboto'
+    : fontTheme === 'space'
+    ? 'font-theme-space'
+    : 'font-theme-inter';
+
   return (
     <div className={`min-h-screen ${
-      themeMode === 'light' ? 'bg-slate-200 text-slate-900' : 'bg-[#090f1f] text-slate-100'
-    } flex flex-col font-sans relative transition-colors duration-500 ${
+      themeMode === 'light' 
+        ? 'bg-slate-200 text-slate-900' 
+        : dashboardTheme === 'amber'
+        ? 'bg-[#180f08] text-amber-100'
+        : dashboardTheme === 'emerald'
+        ? 'bg-[#05170f] text-emerald-100'
+        : dashboardTheme === 'midnight'
+        ? 'bg-[#000000] text-slate-100'
+        : dashboardTheme === 'titanium'
+        ? 'bg-[#11161f] text-slate-100'
+        : 'bg-[#090f1f] text-slate-100'
+    } flex flex-col ${fontClass} relative transition-colors duration-500 ${
       overallStatus === 'critical' ? 'ring-8 ring-inset ring-red-600/40' : ''
     }`}>
       
@@ -509,8 +536,16 @@ export default function App() {
         onLogout={handleLogout}
         themeMode={themeMode}
         onToggleTheme={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+        dashboardTheme={dashboardTheme}
+        onSelectTheme={setDashboardTheme}
+        fontTheme={fontTheme}
+        onSelectFontTheme={setFontTheme}
+        effect3DTheme={effect3DTheme}
+        onSelect3DEffectTheme={setEffect3DTheme}
+        onOpenCustomizer={() => setIsThemeCustomizerOpen(true)}
         serialConnected={serialConnected}
         onConnectSerial={handleConnectSerial}
+        onNavigateHome={() => setActiveTab('overview')}
       />
 
       {/* Tri-State Alarm Banner */}
@@ -555,16 +590,94 @@ export default function App() {
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
             
+            {/* Industrial 3-Light Mine Safety Indicator Bar */}
+            <div className="bg-slate-900/90 border-2 border-slate-700/80 rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-3 bg-black/80 px-4 py-2 rounded-xl border border-slate-700 shadow-inner">
+                  {/* Red Light */}
+                  <div className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full border-2 transition-all duration-300 ${
+                      overallStatus === 'critical'
+                        ? 'bg-red-500 border-red-200 shadow-[0_0_22px_rgba(239,68,68,1)] animate-pulse ring-4 ring-red-500/50 scale-110'
+                        : 'bg-red-950/40 border-red-900/50 opacity-25'
+                    }`} />
+                    <span className={`text-xs font-mono font-black ${overallStatus === 'critical' ? 'text-red-400 animate-pulse' : 'text-slate-500'}`}>
+                      RED (DANGER)
+                    </span>
+                  </div>
+
+                  <div className="w-[1px] h-6 bg-slate-700 mx-1" />
+
+                  {/* Yellow Light */}
+                  <div className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full border-2 transition-all duration-300 ${
+                      overallStatus === 'advisory'
+                        ? 'bg-amber-400 border-amber-100 shadow-[0_0_22px_rgba(245,158,11,1)] animate-pulse ring-4 ring-amber-400/50 scale-110'
+                        : 'bg-amber-950/40 border-amber-900/50 opacity-25'
+                    }`} />
+                    <span className={`text-xs font-mono font-black ${overallStatus === 'advisory' ? 'text-amber-400 font-bold' : 'text-slate-500'}`}>
+                      YELLOW (ADVISORY)
+                    </span>
+                  </div>
+
+                  <div className="w-[1px] h-6 bg-slate-700 mx-1" />
+
+                  {/* Green Light */}
+                  <div className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full border-2 transition-all duration-300 ${
+                      overallStatus === 'normal'
+                        ? 'bg-emerald-400 border-emerald-100 shadow-[0_0_22px_rgba(16,185,129,1)] ring-4 ring-emerald-400/50 scale-110'
+                        : 'bg-emerald-950/40 border-emerald-900/50 opacity-25'
+                    }`} />
+                    <span className={`text-xs font-mono font-black ${overallStatus === 'normal' ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                      GREEN (SAFE)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="leading-tight">
+                  <span className="text-[10px] text-slate-400 font-mono font-bold block uppercase">
+                    DGMS STATUTORY SAFETY LEVEL
+                  </span>
+                  <span className={`text-sm font-black font-mono tracking-wide ${
+                    overallStatus === 'critical' ? 'text-red-400 animate-pulse' : overallStatus === 'advisory' ? 'text-amber-400' : 'text-emerald-400'
+                  }`}>
+                    {overallStatus === 'critical' 
+                      ? '🔴 CRITICAL HAZARD: STRATA RUPTURE / ROOF FALL DANGER — EVACUATE' 
+                      : overallStatus === 'advisory' 
+                      ? '🟡 ADVISORY STRAIN: MONITOR SHEAR DISPLACEMENT & TILT' 
+                      : '🟢 ALL CLEAR: STRATA HOMOGENEOUS & FULLY SECURE'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {serialConnected ? (
+                  <span className="px-3.5 py-1.5 rounded-xl bg-cyan-950/90 border border-cyan-400 text-cyan-300 font-mono text-xs font-black flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)]">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping inline-block" />
+                    LIVE HARDWARE SYNC ACTIVE
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleConnectSerial}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-mono text-xs font-black flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+                  >
+                    <span>CONNECT PHYSICAL ESP32</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            
             {/* Top Row: 2D Spatial Mine Grid + 3D Geological Strata Model */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
               <div className="lg:col-span-7 min-h-[460px]">
                 <SpatialMineGrid
                   nodes={nodes}
                   onSelectNode={(node) => {
-                    setSelectedNode(node);
+                    setSelectedNodeId(node.id);
                     setActiveTab('sensorhub');
                   }}
-                  selectedNodeId={selectedNode ? selectedNode.id : nodes[0]?.id}
+                  selectedNodeId={selectedNodeId}
                 />
               </div>
 
@@ -581,6 +694,9 @@ export default function App() {
               <TelemetryPanels
                 historyData={historyData}
                 status={overallStatus}
+                serialConnected={serialConnected}
+                isSimStreamActive={isSimStreamActive}
+                onToggleSimStream={() => setIsSimStreamActive(prev => !prev)}
               />
             </div>
 
@@ -608,20 +724,27 @@ export default function App() {
 
         {/* TAB 2: 3D SUBTERRANEAN EARTH & SUBSIDENCE DEPTH */}
         {activeTab === 'earth3d' && (
-          <Earth3DExplorer />
+          <Earth3DExplorer
+            nodes={nodes}
+            selectedNodeId={selectedNodeId}
+            onSelectNodeId={setSelectedNodeId}
+            serialConnected={serialConnected}
+            hardwareMode={hardwareMode}
+            maxTilt={maxTilt}
+            maxCrack={maxCrack}
+            maxVibration={maxVibration}
+            effect3DTheme={effect3DTheme}
+          />
         )}
 
         {/* TAB 3: DEDICATED SENSOR DEEP-DIVE & HEALTH HUB */}
         {activeTab === 'sensorhub' && (
           <SensorDeepDiveHub
-            selectedNode={nodes.find(n => n.id === (selectedNode?.id || 'NODE-01')) || nodes[0]}
+            selectedNode={activeSelectedNode}
             allNodes={nodes}
             serialConnected={serialConnected}
             hardwareMode={hardwareMode}
-            onSelectNodeId={(id) => {
-              const target = nodes.find(n => n.id === id);
-              if (target) setSelectedNode(target);
-            }}
+            onSelectNodeId={setSelectedNodeId}
             onBackToOverview={() => setActiveTab('overview')}
           />
         )}
@@ -630,6 +753,8 @@ export default function App() {
         {activeTab === 'temperature' && (
           <TemperatureSection
             nodes={nodes}
+            selectedNodeId={selectedNodeId}
+            onSelectNodeId={setSelectedNodeId}
           />
         )}
 
@@ -637,6 +762,8 @@ export default function App() {
         {activeTab === 'moisture' && (
           <MoistureSection
             nodes={nodes}
+            selectedNodeId={selectedNodeId}
+            onSelectNodeId={setSelectedNodeId}
           />
         )}
 
@@ -644,6 +771,10 @@ export default function App() {
         {activeTab === 'vibration' && (
           <VibrationSection
             nodes={nodes}
+            selectedNodeId={selectedNodeId}
+            onSelectNodeId={setSelectedNodeId}
+            serialConnected={serialConnected}
+            hardwareMode={hardwareMode}
             onInjectTremor={handleInjectTremor}
           />
         )}
@@ -653,6 +784,8 @@ export default function App() {
           <CrackSection
             nodes={nodes}
             maxCrack={maxCrack}
+            selectedNodeId={selectedNodeId}
+            onSelectNodeId={setSelectedNodeId}
           />
         )}
 
@@ -669,6 +802,13 @@ export default function App() {
         {activeTab === 'sensor3d' && (
           <Sensor3DModel
             status={overallStatus}
+            node={activeSelectedNode}
+            allNodes={nodes}
+            selectedNodeId={selectedNodeId}
+            onSelectNodeId={setSelectedNodeId}
+            serialConnected={serialConnected}
+            hardwareMode={hardwareMode}
+            effect3DTheme={effect3DTheme}
           />
         )}
 
@@ -684,7 +824,7 @@ export default function App() {
           <SensorLocationsSection
             nodes={nodes}
             onSelectNode={(node) => {
-              setSelectedNode(node);
+              setSelectedNodeId(node.id);
               setActiveTab('sensorhub');
             }}
           />
@@ -745,6 +885,18 @@ export default function App() {
         activeMiners={activeMiners}
         shiftName={currentShift}
         onDownloadPdf={handleDirectPdfExport}
+      />
+
+      {/* Theme, Font & 3D Effect Studio Customizer (5x5x5) */}
+      <ThemeCustomizerModal
+        isOpen={isThemeCustomizerOpen}
+        onClose={() => setIsThemeCustomizerOpen(false)}
+        currentColorTheme={dashboardTheme}
+        onSelectColorTheme={setDashboardTheme}
+        currentFontTheme={fontTheme}
+        onSelectFontTheme={setFontTheme}
+        current3DEffectTheme={effect3DTheme}
+        onSelect3DEffectTheme={setEffect3DTheme}
       />
 
     </div>

@@ -1,17 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Radio, AlertTriangle, ShieldCheck, Zap, Waves as WaveIcon, Maximize2 } from 'lucide-react';
+import { Activity, Radio, AlertTriangle, ShieldCheck, Zap, Waves as WaveIcon, Maximize2, Usb } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 import { getAssetUrl } from '../utils/assetHelper';
 import ImageLightboxModal from './ImageLightboxModal';
 
-export default function VibrationSection({ nodes, onInjectTremor }) {
+export default function VibrationSection({ 
+  nodes, 
+  selectedNodeId = 'NODE-01',
+  onSelectNodeId,
+  serialConnected = false,
+  hardwareMode = 'simulation',
+  onInjectTremor 
+}) {
   const canvasRef = useRef(null);
-  const [activeNodeId, setActiveNodeId] = useState('NODE-01');
+  const [activeNodeId, setActiveNodeId] = useState(selectedNodeId || 'NODE-01');
   const [tremorBurst, setTremorBurst] = useState(false);
   const [lightboxData, setLightboxData] = useState(null);
 
-  const activeNode = nodes.find(n => n.id === activeNodeId) || nodes[0];
-  const peakG = activeNode.vibrationG || 0.06;
+  useEffect(() => {
+    if (selectedNodeId) setActiveNodeId(selectedNodeId);
+  }, [selectedNodeId]);
+
+  const activeNode = nodes.find(n => n.id === activeNodeId) || nodes[0] || {
+    vibrationG: 0.01,
+    freq: 14.2
+  };
+  const peakG = activeNode.vibrationG || 0.01;
+  const resonantFreq = activeNode.freq || 14.2;
 
   // Real-time canvas oscilloscope animation
   useEffect(() => {
@@ -60,12 +75,11 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
       ctx.shadowBlur = 10;
 
       ctx.beginPath();
-      const baseAmp = isCritical ? 65 : isAdvisory ? 38 : 12;
+      const baseAmp = Math.min(midY - 10, isCritical ? 75 : isAdvisory ? 45 : 12 + (peakG * 80));
       const freq1 = 0.04;
       const freq2 = 0.09;
 
       for (let x = 0; x < canvas.width; x++) {
-        // Multi-frequency seismic noise simulation
         const noise = (Math.random() - 0.5) * (isCritical ? 14 : 3);
         const y = midY + Math.sin(x * freq1 + phase) * baseAmp + Math.cos(x * freq2 - phase * 1.5) * (baseAmp * 0.4) + noise;
         if (x === 0) ctx.moveTo(x, y);
@@ -74,7 +88,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      phase += isCritical ? 0.18 : 0.06;
+      phase += isCritical ? 0.22 : 0.08;
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -112,7 +126,7 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
       )}
 
       {/* Header Banner - High Contrast */}
-      <div className="bg-[#152238] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl">
+      <div className="bg-[#152238] border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col lg:flex-row items-center justify-between gap-5 shadow-2xl">
         <div className="flex items-center gap-4">
           <div className="p-4 rounded-2xl bg-cyan-500/30 text-cyan-300 border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
             <Activity className="w-10 h-10 animate-pulse" />
@@ -123,9 +137,14 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
               <span className="text-xs bg-cyan-500 text-slate-950 font-black px-3.5 py-1 rounded-full uppercase">
                 60 FPS LIVE STREAM
               </span>
+              {serialConnected && (
+                <span className="text-xs bg-cyan-950 text-cyan-300 border border-cyan-400 px-3 py-1 rounded-full font-mono font-bold flex items-center gap-1">
+                  <Usb className="w-3.5 h-3.5" /> SENSOR LINKED
+                </span>
+              )}
             </h2>
             <p className="text-base text-slate-100 font-bold mt-1">
-              Triaxial MEMS accelerometer telemetry • Detects micro-fracturing acoustic emissions prior to dynamic rock bursts
+              Triaxial MEMS accelerometer telemetry • Peak: <strong className="text-cyan-300 font-mono">{peakG.toFixed(3)}g</strong> (Danger Cutoff: &gt;0.35g) • Freq: <strong className="text-emerald-400 font-mono">{resonantFreq.toFixed(1)}Hz</strong> (Limit: &gt;20Hz)
             </p>
           </div>
         </div>
@@ -135,7 +154,10 @@ export default function VibrationSection({ nodes, onInjectTremor }) {
           <span className="text-sm text-white font-black">Station:</span>
           <select
             value={activeNodeId}
-            onChange={(e) => setActiveNodeId(e.target.value)}
+            onChange={(e) => {
+              setActiveNodeId(e.target.value);
+              if (onSelectNodeId) onSelectNodeId(e.target.value);
+            }}
             className="bg-[#16233d] text-cyan-300 font-mono text-sm font-black border border-cyan-500/50 px-4 py-2 rounded-xl outline-none cursor-pointer shadow-md"
           >
             {nodes.map(n => (

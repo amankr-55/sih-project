@@ -15,7 +15,8 @@ import {
   UserCheck,
   Sun,
   Moon,
-  Usb
+  Usb,
+  Palette
 } from 'lucide-react';
 
 export default function Header({ 
@@ -31,8 +32,14 @@ export default function Header({
   onLogout,
   themeMode = 'dark',
   onToggleTheme,
+  dashboardTheme = 'cyber',
+  onSelectTheme,
+  fontTheme = 'inter',
+  effect3DTheme = 'sensor-sync',
+  onOpenCustomizer,
   serialConnected = false,
-  onConnectSerial
+  onConnectSerial,
+  onNavigateHome
 }) {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -63,15 +70,19 @@ export default function Header({
     <header className="bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-6 py-4 sticky top-0 z-40 shadow-2xl">
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-5">
         
-        {/* Left: Brand & Green ThinkerX Badge */}
-        <div className="flex items-center gap-4">
+        {/* Left: Brand & Green ThinkerX Badge (Clickable to open Command Dashboard) */}
+        <button
+          onClick={onNavigateHome}
+          className="flex items-center gap-4 text-left hover:opacity-90 transition-all cursor-pointer group bg-transparent border-0 p-0"
+          title="Click GEO SENTINEL logo to open Command Overview Dashboard"
+        >
           <div className="relative">
-            <div className={`p-3 rounded-2xl border ${
+            <div className={`p-3 rounded-2xl border transition-all ${
               status === 'critical' 
                 ? 'bg-red-950/80 border-red-500 text-red-400 animate-pulse' 
-                : 'bg-slate-900 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                : 'bg-slate-900 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] group-hover:border-cyan-300'
             }`}>
-              <Layers className="w-8 h-8" />
+              <Layers className="w-8 h-8 group-hover:scale-105 transition-transform" />
             </div>
             {status === 'critical' && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -83,8 +94,8 @@ export default function Header({
 
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-3xl font-black tracking-wider text-white flex items-center gap-1.5">
-                GEO<span className="text-cyan-400">SENTINEL</span>
+              <h1 className="text-3xl font-black tracking-wider text-white flex items-center gap-1.5 group-hover:text-cyan-200 transition-colors">
+                GEO<span className="text-cyan-400 group-hover:text-cyan-300">SENTINEL</span>
               </h1>
               
               {/* Green ThinkerX Brand Badge */}
@@ -101,53 +112,122 @@ export default function Header({
               <span>AI Mine Subsidence Early Warning System</span>
               <span className="text-slate-600">•</span>
               <span className="text-emerald-400 font-mono font-bold tracking-wide">DGMS COMPLIANT</span>
+              <span className="text-xs text-cyan-400/80 font-mono ml-1 underline underline-offset-2">Go to Dashboard</span>
             </p>
           </div>
-        </div>
+        </button>
 
-        {/* Center: Big Bold CMSI Radial Gauge */}
-        <div className="flex items-center gap-5 bg-slate-900/90 border border-slate-700/80 px-5 py-2.5 rounded-2xl shadow-xl">
-          <div className="relative flex items-center justify-center">
-            <svg className="w-20 h-20 transform -rotate-90">
-              <circle
-                cx="40"
-                cy="40"
-                r={radius}
-                stroke="#1e293b"
-                strokeWidth="6"
-                fill="transparent"
-              />
-              <circle
-                cx="40"
-                cy="40"
-                r={radius}
-                stroke={cmsiColor}
-                strokeWidth="6"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                fill="transparent"
-                className="transition-all duration-700 ease-out"
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-black text-white leading-none font-mono">
-                {cmsi}
+        {/* Center: 3-LIGHT SAFETY BEACON + CMSI GAUGE */}
+        <div className="flex flex-wrap items-center gap-4">
+          
+          {/* Industrial 3-Light Mine Safety Beacon Stack (Red / Yellow / Green) */}
+          <div className="flex items-center gap-3.5 bg-slate-900/95 border-2 border-slate-700/90 px-4 py-2 rounded-2xl shadow-xl">
+            <div className="flex items-center gap-2.5 bg-black/70 px-3 py-1.5 rounded-xl border border-slate-800">
+              
+              {/* RED LIGHT (DANGER) */}
+              <div className="flex flex-col items-center gap-1">
+                <div 
+                  className={`w-6 h-6 rounded-full border-2 transition-all duration-300 ${
+                    status === 'critical'
+                      ? 'bg-red-500 border-red-200 shadow-[0_0_22px_rgba(239,68,68,1)] animate-pulse ring-4 ring-red-500/50 scale-110'
+                      : 'bg-red-950/30 border-red-900/40 opacity-25'
+                  }`} 
+                  title="RED: DANGER / CRITICAL STRATA COLLAPSE"
+                />
+                <span className={`text-[9px] font-mono font-black ${status === 'critical' ? 'text-red-400 animate-pulse' : 'text-slate-600'}`}>
+                  RED
+                </span>
+              </div>
+
+              {/* YELLOW LIGHT (ADVISORY) */}
+              <div className="flex flex-col items-center gap-1">
+                <div 
+                  className={`w-6 h-6 rounded-full border-2 transition-all duration-300 ${
+                    status === 'advisory'
+                      ? 'bg-amber-400 border-amber-100 shadow-[0_0_22px_rgba(245,158,11,1)] animate-pulse ring-4 ring-amber-400/50 scale-110'
+                      : 'bg-amber-950/30 border-amber-900/40 opacity-25'
+                  }`}
+                  title="YELLOW: ADVISORY / SHEAR WARNING"
+                />
+                <span className={`text-[9px] font-mono font-black ${status === 'advisory' ? 'text-amber-400 animate-pulse' : 'text-slate-600'}`}>
+                  YEL
+                </span>
+              </div>
+
+              {/* GREEN LIGHT (SAFE) */}
+              <div className="flex flex-col items-center gap-1">
+                <div 
+                  className={`w-6 h-6 rounded-full border-2 transition-all duration-300 ${
+                    status === 'normal'
+                      ? 'bg-emerald-400 border-emerald-100 shadow-[0_0_22px_rgba(16,185,129,1)] ring-4 ring-emerald-400/40 scale-110'
+                      : 'bg-emerald-950/30 border-emerald-900/40 opacity-25'
+                  }`}
+                  title="GREEN: STATUTORY SAFE / CALIBRATED"
+                />
+                <span className={`text-[9px] font-mono font-black ${status === 'normal' ? 'text-emerald-400 font-bold' : 'text-slate-600'}`}>
+                  GRN
+                </span>
+              </div>
+
+            </div>
+
+            <div className="text-left hidden sm:block leading-tight">
+              <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block">
+                3-LIGHT BEACON
               </span>
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                INDEX
+              <span className={`text-xs font-black font-mono tracking-wide ${
+                status === 'critical' ? 'text-red-400 animate-pulse' : status === 'advisory' ? 'text-amber-400' : 'text-emerald-400'
+              }`}>
+                {status === 'critical' ? '🔴 DANGER HAZARD' : status === 'advisory' ? '🟡 ADVISORY STRAIN' : '🟢 SAFE & STABLE'}
               </span>
             </div>
           </div>
 
-          <div className="text-left">
-            <div className="text-xs uppercase font-bold tracking-wider text-slate-300">
-              Mine Safety Health Index
+          {/* Big Bold CMSI Radial Gauge */}
+          <div className="flex items-center gap-4 bg-slate-900/90 border border-slate-700/80 px-4 py-2 rounded-2xl shadow-xl">
+            <div className="relative flex items-center justify-center">
+              <svg className="w-16 h-16 transform -rotate-90">
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="26"
+                  stroke="#1e293b"
+                  strokeWidth="5"
+                  fill="transparent"
+                />
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="26"
+                  stroke={cmsiColor}
+                  strokeWidth="5"
+                  strokeDasharray={2 * Math.PI * 26}
+                  strokeDashoffset={2 * Math.PI * 26 - (cmsi / 100) * 2 * Math.PI * 26}
+                  strokeLinecap="round"
+                  fill="transparent"
+                  className="transition-all duration-700 ease-out"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-black text-white leading-none font-mono">
+                  {cmsi}
+                </span>
+                <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  CMSI
+                </span>
+              </div>
             </div>
-            <div className={`text-sm font-black px-3 py-1 rounded-lg border inline-block mt-1 ${statusBadgeBg}`}>
-              {statusText}
+
+            <div className="text-left hidden md:block">
+              <div className="text-[11px] uppercase font-bold tracking-wider text-slate-300">
+                Safety Index
+              </div>
+              <div className={`text-xs font-black px-2.5 py-0.5 rounded-lg border inline-block mt-0.5 ${statusBadgeBg}`}>
+                {statusText}
+              </div>
             </div>
           </div>
+
         </div>
 
         {/* Right: Controls & Actions */}
@@ -237,6 +317,38 @@ export default function Header({
                 </>
               )}
             </button>
+          )}
+
+          {/* 5x5 Theme, Font & 3D Effect Customization Studio Button */}
+          {onOpenCustomizer && (
+            <button
+              onClick={onOpenCustomizer}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/40 border border-purple-400/40 hover:scale-105"
+              title="Open 5x5 Theme, Font & 3D Effect Studio"
+            >
+              <Palette className="w-4 h-4 text-yellow-300 animate-pulse" />
+              <span className="hidden sm:inline">🎨 5x5 THEME STUDIO</span>
+              <span className="sm:hidden">🎨 5x5</span>
+            </button>
+          )}
+
+          {/* Dashboard Color Theme Selector */}
+          {onSelectTheme && (
+            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs shadow-md">
+              <Palette className="w-4 h-4 text-cyan-400" />
+              <select
+                value={dashboardTheme}
+                onChange={(e) => onSelectTheme(e.target.value)}
+                className="bg-transparent text-slate-100 text-xs font-black outline-none cursor-pointer"
+                title="Manually change Dashboard Color Theme"
+              >
+                <option value="cyber" className="bg-slate-900 text-cyan-400">🌌 Cyber Cyan (Default)</option>
+                <option value="amber" className="bg-slate-900 text-amber-400">🌋 Volcanic Amber</option>
+                <option value="emerald" className="bg-slate-900 text-emerald-400">🌲 Emerald Mine</option>
+                <option value="midnight" className="bg-slate-900 text-purple-400">⚡ Midnight OLED</option>
+                <option value="titanium" className="bg-slate-900 text-blue-300">🏙️ Industrial Titanium</option>
+              </select>
+            </div>
           )}
 
           {/* Export DGMS Report Button */}

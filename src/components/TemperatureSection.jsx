@@ -2,9 +2,17 @@ import React, { useState } from 'react';
 import { Thermometer, Flame, AlertTriangle, ShieldCheck, Sun, Wind, ArrowUpRight, Gauge, CheckCircle2 } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
-export default function TemperatureSection({ nodes }) {
-  const [selectedNodeId, setSelectedNodeId] = useState('NODE-01');
+export default function TemperatureSection({ 
+  nodes, 
+  selectedNodeId: propSelectedNodeId = 'NODE-01',
+  onSelectNodeId 
+}) {
+  const [selectedNodeId, setSelectedNodeId] = useState(propSelectedNodeId || 'NODE-01');
   const [simTemp, setSimTemp] = useState(null);
+
+  React.useEffect(() => {
+    if (propSelectedNodeId) setSelectedNodeId(propSelectedNodeId);
+  }, [propSelectedNodeId]);
 
   const activeNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
   const currentTemp = simTemp !== null ? simTemp : (activeNode.temperature || 29.4);
@@ -41,6 +49,7 @@ export default function TemperatureSection({ nodes }) {
             onChange={(e) => {
               setSelectedNodeId(e.target.value);
               setSimTemp(null);
+              if (onSelectNodeId) onSelectNodeId(e.target.value);
             }}
             className="bg-[#16233d] text-orange-300 font-mono text-sm font-black border border-orange-500/50 px-4 py-2 rounded-xl outline-none cursor-pointer shadow-md"
           >

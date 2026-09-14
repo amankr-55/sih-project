@@ -1,17 +1,48 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Box, RotateCw, ZoomIn, ZoomOut, ShieldCheck, Cpu, Battery, Radio } from 'lucide-react';
+import { Box, RotateCw, ZoomIn, ZoomOut, ShieldCheck, Cpu, Battery, Radio, Usb, Sliders, Activity } from 'lucide-react';
 
-export default function Sensor3DModel({ status = 'normal' }) {
+export default function Sensor3DModel({ 
+  status = 'normal',
+  node = null,
+  allNodes = [],
+  selectedNodeId = 'NODE-01',
+  onSelectNodeId,
+  serialConnected = false,
+  hardwareMode = 'simulation',
+  effect3DTheme = 'sensor-sync'
+}) {
   const mountRef = useRef(null);
-  const [isRotating, setIsRotating] = useState(true);
+  const [syncMode, setSyncMode] = useState('sensor'); // 'sensor' | 'manual' | 'orbit'
+  const [manualPitch, setManualPitch] = useState(0); // -60 to +60 deg
+  const [manualRoll, setManualRoll] = useState(0); // -60 to +60 deg
+  const [showControls, setShowControls] = useState(false);
+
+  useEffect(() => {
+    if (effect3DTheme === 'cad') {
+      setSyncMode('manual');
+      setManualPitch(0);
+      setManualRoll(0);
+    } else {
+      setSyncMode('sensor');
+    }
+  }, [effect3DTheme]);
+
+  const activeNode = node || allNodes.find(n => n.id === selectedNodeId) || allNodes[0] || {
+    id: 'NODE-01',
+    name: 'Master Sensor Unit',
+    tiltX: 0,
+    tiltY: 0,
+    vibrationG: 0.01,
+    temperature: 28.5
+  };
 
   useEffect(() => {
     const currentMount = mountRef.current;
     if (!currentMount) return;
 
     const width = currentMount.clientWidth;
-    const height = currentMount.clientHeight || 340;
+    const height = currentMount.clientHeight || 360;
 
     // Scene, Camera, Renderer
     const scene = new THREE.Scene();
@@ -123,7 +154,7 @@ export default function Sensor3DModel({ status = 'normal' }) {
 
     const onMouseDown = (e) => {
       isDragging = true;
-      setIsRotating(false);
+      setSyncMode('manual');
       previousMousePosition = { x: e.clientX, y: e.clientY };
     };
 
@@ -149,12 +180,32 @@ export default function Sensor3DModel({ status = 'normal' }) {
     const animate = () => {
       reqId = requestAnimationFrame(animate);
 
-      if (isRotating && !isDragging) {
-        nodeGroup.rotation.y += 0.012;
+      if (syncMode === 'sensor' && !isDragging) {
+        // Map real MPU-6050 angles: Pitch (tiltX) and Roll (tiltY)
+        const targetRotX = THREE.MathUtils.degToRad(activeNode.tiltX || 0);
+        const targetRotZ = THREE.MathUtils.degToRad(activeNode.tiltY || (activeNode.tiltX ? activeNode.tiltX * 0.5 : 0));
+        
+        nodeGroup.rotation.x += (targetRotX - nodeGroup.rotation.x) * 0.18;
+        nodeGroup.rotation.z += (targetRotZ - nodeGroup.rotation.z) * 0.18;
+        nodeGroup.rotation.y += 0.003;
+      } else if (syncMode === 'manual' && !isDragging) {
+        const targetRotX = THREE.MathUtils.degToRad(manualPitch);
+        const targetRotZ = THREE.MathUtils.degToRad(manualRoll);
+        nodeGroup.rotation.x += (targetRotX - nodeGroup.rotation.x) * 0.2;
+        nodeGroup.rotation.z += (targetRotZ - nodeGroup.rotation.z) * 0.2;
+      } else if (syncMode === 'orbit' && !isDragging) {
+        nodeGroup.rotation.y += 0.015;
       }
 
-      // Gentle floating bob
-      nodeGroup.position.y = Math.sin(Date.now() * 0.002) * 0.8;
+      // Dynamic vibration jitter on 3D twin
+      const vibG = activeNode.vibrationG || 0.01;
+      if (vibG > 0.08) {
+        nodeGroup.position.x = (Math.random() - 0.5) * Math.min(2.5, vibG * 3.5);
+        nodeGroup.position.y = (Math.random() - 0.5) * Math.min(2.5, vibG * 3.5);
+        nodeGroup.position.z = (Math.random() - 0.5) * Math.min(2.5, vibG * 3.5);
+      } else {
+        nodeGroup.position.y = Math.sin(Date.now() * 0.002) * 0.8;
+      }
 
       renderer.render(scene, camera);
     };
@@ -165,7 +216,7 @@ export default function Sensor3DModel({ status = 'normal' }) {
     const handleResize = () => {
       if (!currentMount) return;
       const w = currentMount.clientWidth;
-      const h = currentMount.clientHeight || 340;
+      const h = currentMount.clientHeight || 360;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -183,55 +234,130 @@ export default function Sensor3DModel({ status = 'normal' }) {
       }
       renderer.dispose();
     };
-  }, [status, isRotating]);
+  }, [status, syncMode, manualPitch, manualRoll, activeNode.tiltX, activeNode.tiltY, activeNode.vibrationG]);
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col relative overflow-hidden">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col relative overflow-hidden text-white space-y-4">
       
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 z-10">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 z-10 border-b border-slate-800 pb-4">
         <div>
-          <h3 className="text-lg font-black text-white flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-cyan-400" />
+          <h3 className="text-xl font-black text-white flex items-center gap-2">
+            <Cpu className="w-6 h-6 text-cyan-400" />
             3D DIGITAL TWIN: GEOSENTINEL IOT SENSOR NODE
+            {serialConnected && (
+              <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/50 px-2 py-0.5 rounded-full font-mono font-bold flex items-center gap-1">
+                <Usb className="w-3 h-3" /> HARDWARE SYNCED
+              </span>
+            )}
           </h3>
-          <p className="text-xs text-slate-400">
-            Interactive 3D Hardware CAD Render • Drag with mouse to inspect 360°
+          <p className="text-xs text-slate-300">
+            Interactive 3D Hardware CAD Render • Real-Time Physical MPU-6050 Orientation Tracking
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* 3D Motion Modes */}
+        <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
           <button
-            onClick={() => setIsRotating(!isRotating)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              isRotating ? 'bg-cyan-600 border-cyan-500 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-300'
+            onClick={() => setSyncMode('sensor')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              syncMode === 'sensor' ? 'bg-cyan-500 text-slate-950 shadow-md font-black' : 'text-slate-300 hover:text-white'
             }`}
           >
-            <RotateCw className={`w-3.5 h-3.5 ${isRotating ? 'animate-spin' : ''}`} />
-            <span>{isRotating ? 'Auto Orbit' : 'Rotate Manual'}</span>
+            <Activity className="w-3.5 h-3.5" />
+            <span>Sensor Sync</span>
+          </button>
+
+          <button
+            onClick={() => setShowControls(!showControls)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              showControls ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Manual 3D</span>
+          </button>
+
+          <button
+            onClick={() => setSyncMode(syncMode === 'orbit' ? 'sensor' : 'orbit')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              syncMode === 'orbit' ? 'bg-purple-600 text-white shadow-md font-black' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${syncMode === 'orbit' ? 'animate-spin' : ''}`} />
+            <span>Orbit</span>
           </button>
         </div>
       </div>
 
+      {/* Manual Controls Drawer if opened */}
+      {showControls && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950/80 p-4 rounded-2xl border border-amber-500/40 text-xs font-mono animate-fade-in">
+          <div>
+            <div className="flex justify-between text-slate-300 font-bold mb-1">
+              <span>Manual Pitch Angle:</span>
+              <span className="text-cyan-400 font-black">{manualPitch}°</span>
+            </div>
+            <input
+              type="range"
+              min="-60"
+              max="60"
+              value={manualPitch}
+              onChange={(e) => {
+                setManualPitch(parseInt(e.target.value));
+                setSyncMode('manual');
+              }}
+              className="w-full accent-cyan-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between text-slate-300 font-bold mb-1">
+              <span>Manual Roll Angle:</span>
+              <span className="text-amber-400 font-black">{manualRoll}°</span>
+            </div>
+            <input
+              type="range"
+              min="-60"
+              max="60"
+              value={manualRoll}
+              onChange={(e) => {
+                setManualRoll(parseInt(e.target.value));
+                setSyncMode('manual');
+              }}
+              className="w-full accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
       {/* 3D Viewport Container */}
       <div 
         ref={mountRef} 
-        className="w-full h-80 relative rounded-2xl bg-gradient-to-b from-[#0f172a] to-[#020617] border border-slate-800/80 cursor-grab active:cursor-grabbing overflow-hidden flex items-center justify-center"
+        className="w-full h-84 relative rounded-2xl bg-gradient-to-b from-[#0f172a] to-[#020617] border border-slate-800/80 cursor-grab active:cursor-grabbing overflow-hidden flex items-center justify-center"
       >
-        {/* Dimensions overlay */}
-        <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur border border-slate-700/80 px-3 py-1.5 rounded-xl text-[11px] font-mono text-slate-300 space-y-0.5 pointer-events-none">
-          <div>SCALE: <strong>1:1 Form Factor</strong></div>
-          <div>ENCLOSURE: <strong>IP67 Polycarbonate + Die-Cast Steel</strong></div>
-          <div>DIMENSIONS: <strong>140 × 160 × 70 mm</strong></div>
+        {/* Real-time MPU-6050 Orientation HUD */}
+        <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur border border-slate-700/80 px-4 py-2 rounded-2xl text-xs font-mono text-slate-200 space-y-1 pointer-events-none shadow-xl">
+          <div className="text-cyan-400 font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            STATION: {activeNode.id}
+          </div>
+          <div>PITCH (X): <strong className="text-white">{(activeNode.tiltX || 0).toFixed(2)}°</strong></div>
+          <div>ROLL (Y): <strong className="text-amber-400">{(activeNode.tiltY || ((activeNode.tiltX || 0) * 0.5)).toFixed(2)}°</strong></div>
+          <div>VIBRATION: <strong className="text-emerald-400">{(activeNode.vibrationG || 0.01).toFixed(3)}g</strong></div>
+        </div>
+
+        <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur border border-slate-700/80 px-3 py-1.5 rounded-xl text-[11px] font-mono text-slate-300 pointer-events-none hidden sm:block">
+          ENCLOSURE: <strong>IP67 Die-Cast Steel + PC</strong>
         </div>
 
         <div className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur border border-slate-700/80 px-3 py-1 rounded-xl text-[10px] font-mono text-cyan-400 pointer-events-none">
-          💡 Click & Drag to Orbit 3D Model
+          💡 Click & Drag to Orbit 3D Model • Move Physical Sensor to Tilt Live
         </div>
       </div>
 
       {/* Hardware Specifications Badges below 3D Model */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs font-mono">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
         <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center">
           <span className="text-slate-400 text-[10px] block">Microcontroller</span>
           <span className="font-bold text-white">ESP32-S3 Dual Core</span>

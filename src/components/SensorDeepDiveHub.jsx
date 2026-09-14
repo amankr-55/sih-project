@@ -71,29 +71,24 @@ function calculateSensorHealth(node, isHardwareConnected) {
     score -= 10;
   }
 
-  // Live Hardware Confidence boost
-  if (isHardwareConnected) {
-    score = Math.max(score, 70); // Confirmed I2C bus acknowledge 0x68
-  }
-
-  score = Math.max(15, Math.min(100, Math.round(score)));
+  score = Math.max(10, Math.min(100, Math.round(score)));
 
   let statusLabel = '100% OPTIMAL / CALIBRATED';
   let statusBadge = 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
   let statusProgress = 'from-emerald-500 to-cyan-400';
   let conditionText = 'Zero datum locked. All piezoelectric transducers operating with maximum linearity.';
   
-  if (score < 55) {
+  if (score < 50) {
     statusLabel = 'CRITICAL STRATA STRAIN';
     statusBadge = 'bg-red-950 text-red-300 border-red-500/60 animate-pulse';
     statusProgress = 'from-red-600 to-amber-500';
     conditionText = 'Severe mechanical rock displacement. Mounting bracket under geotechnical shear stress!';
-  } else if (score < 78) {
+  } else if (score < 75) {
     statusLabel = 'WARNING / STRAINED';
     statusBadge = 'bg-amber-950 text-amber-300 border-amber-500/50';
     statusProgress = 'from-amber-500 to-yellow-400';
     conditionText = 'Advisory threshold approached. Micro-tremor oscillation detected in anchor bolt.';
-  } else if (score < 92) {
+  } else if (score < 90) {
     statusLabel = 'GOOD NOMINAL';
     statusBadge = 'bg-cyan-950 text-cyan-300 border-cyan-500/40';
     statusProgress = 'from-cyan-500 to-blue-500';
