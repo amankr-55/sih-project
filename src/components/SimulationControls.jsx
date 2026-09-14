@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Sliders, Play, RotateCcw, AlertTriangle, Siren, Flame, Cpu, Usb, Radio } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
@@ -7,7 +7,9 @@ export default function SimulationControls({
   onTriggerScenario, 
   onManualSliderChange,
   hardwareMode,
-  onToggleHardwareMode 
+  onToggleHardwareMode,
+  serialConnected = false,
+  onConnectSerial 
 }) {
   const [selectedNodeId, setSelectedNodeId] = useState('NODE-01');
   const currentNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
@@ -50,15 +52,18 @@ export default function SimulationControls({
             <span>Sand-Tray Sim</span>
           </button>
           <button
-            onClick={() => onToggleHardwareMode('hardware')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all ${
+            onClick={() => {
+              onToggleHardwareMode('hardware');
+              if (!serialConnected && onConnectSerial) onConnectSerial();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
               hardwareMode === 'hardware'
                 ? 'bg-cyan-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Usb className="w-3.5 h-3.5" />
-            <span>LoRa USB (COM3)</span>
+            <Usb className={`w-3.5 h-3.5 ${serialConnected ? 'text-emerald-400 animate-pulse' : 'text-cyan-400'}`} />
+            <span>{serialConnected ? 'ESP32 Live (COM6)' : 'Connect ESP32 (COM6)'}</span>
           </button>
         </div>
       </div>

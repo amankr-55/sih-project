@@ -75,6 +75,92 @@ export default function App() {
   const [activeMiners, setActiveMiners] = useState(48);
   const [hardwareMode, setHardwareMode] = useState('simulation');
   const [isDgmsModalOpen, setIsDgmsModalOpen] = useState(false);
+  const [serialConnected, setSerialConnected] = useState(false);
+
+  // WebSerial API handler for live physical ESP32 streaming
+  async function handleConnectSerial() {
+    if ('serial' in navigator) {
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        setSerialConnected(true);
+        setHardwareMode('hardware');
+        logEvent('normal', 'USB', 'ESP32 Subterranean Node connected via WebSerial (COM Port 115200 baud)');
+
+        const textDecoder = new TextDecoderStream();
+        port.readable.pipeTo(textDecoder.writable);
+        const reader = textDecoder.readable.getReader();
+
+        let lineBuffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            reader.releaseLock();
+            break;
+          }
+          if (value) {
+            lineBuffer += value;
+            const lines = lineBuffer.split('\n');
+            lineBuffer = lines.pop();
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed && trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                  const data = JSON.parse(trimmed);
+                  handleHardwareTelemetry(data);
+                } catch (e) {
+                  // ignore incomplete JSON
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Serial port error:', err);
+        setSerialConnected(false);
+        logEvent('advisory', 'USB', `WebSerial connection: ${err.message}`);
+      }
+    } else {
+      alert('WebSerial is natively supported in Google Chrome, Microsoft Edge, and Opera!');
+    }
+  }
+
+  function handleHardwareTelemetry(data) {
+    // Expected packet: {"id":"NODE-01","location":"Seam 3-A Longwall Face","tilt":0.00,"vibration":0.01,"freq":0.0,"mining_thresh":0.22,"crack":0.00,"ch4":0.00,"temp":24.5,"moisture":15.0,"status":"normal","timestamp":123}
+    setNodes(prevNodes => prevNodes.map(n => {
+      if (n.id === (data.id || 'NODE-01')) {
+        const tilt = typeof data.tilt === 'number' ? data.tilt : n.tiltX;
+        const vib = typeof data.vibration === 'number' ? data.vibration : n.vibrationG;
+        const crack = typeof data.crack === 'number' ? data.crack : n.crackDisplacement;
+        const temp = typeof data.temp === 'number' ? data.temp : n.temperature;
+        const status = data.status || n.status;
+
+        return {
+          ...n,
+          tiltX: tilt,
+          tiltY: 0.0,
+          vibrationG: vib,
+          crackDisplacement: crack,
+          temperature: temp,
+          status
+        };
+      }
+      return n;
+    }));
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setHistoryData(prev => [
+      ...prev.slice(1),
+      {
+        time: timeStr,
+        tilt: +(data.tilt || 0).toFixed(2),
+        crack: +(data.crack || 0).toFixed(2),
+        ch4: +(data.ch4 || 0).toFixed(2),
+        co: +(data.vibration || 0).toFixed(2)
+      }
+    ]);
+  }
 
   const [events, setEvents] = useState([
     {
@@ -178,8 +264,10 @@ export default function App() {
     setEvents(prev => [newEvt, ...prev.slice(0, 49)]);
   }
 
-  // Periodic subtle jitter / streaming data tick
+  // Periodic subtle jitter / streaming data tick (Only active in simulation mode)
   useEffect(() => {
+    if (hardwareMode === 'hardware') return;
+
     const interval = setInterval(() => {
       setHistoryData(prevHistory => {
         const now = new Date();
@@ -197,7 +285,7 @@ export default function App() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [maxTilt, maxCrack, maxCH4, maxCO]);
+  }, [maxTilt, maxCrack, maxCH4, maxCO, hardwareMode]);
 
   // Siren toggle handler
   function handleToggleSiren() {
@@ -359,6 +447,8 @@ export default function App() {
         onLogout={handleLogout}
         themeMode={themeMode}
         onToggleTheme={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+        serialConnected={serialConnected}
+        onConnectSerial={handleConnectSerial}
       />
 
       {/* Tri-State Alarm Banner */}
@@ -439,6 +529,8 @@ export default function App() {
                   onManualSliderChange={handleManualSliderChange}
                   hardwareMode={hardwareMode}
                   onToggleHardwareMode={setHardwareMode}
+                  serialConnected={serialConnected}
+                  onConnectSerial={handleConnectSerial}
                 />
               </div>
 
@@ -544,7 +636,11 @@ export default function App() {
 
         {/* TAB 11: SETTINGS & HARDWARE BRIDGE (OWNER / ADMIN EXCLUSIVE) */}
         {activeTab === 'settings' && isAdmin && (
-          <SettingsSection />
+          <SettingsSection 
+            serialConnected={serialConnected}
+            onConnectSerial={handleConnectSerial}
+            onHardwareTelemetry={handleHardwareTelemetry}
+          />
         )}
 
         {/* TAB 12: VISITOR & USER LOGINS AUDIT (OWNER / ADMIN EXCLUSIVE) */}
