@@ -89,6 +89,18 @@ export default function App() {
   ]);
   const [thresholds, setThresholds] = useState({ ...DGMS_THRESHOLDS });
 
+  const serialWriterRef = useRef(null);
+
+  async function sendSerialCommand(cmd) {
+    if (serialWriterRef.current) {
+      try {
+        await serialWriterRef.current.write(`${cmd}\n`);
+      } catch (e) {
+        console.warn('WebSerial send error:', e);
+      }
+    }
+  }
+
   // WebSerial API handler for live physical ESP32 streaming
   async function handleConnectSerial() {
     if ('serial' in navigator) {
@@ -103,6 +115,12 @@ export default function App() {
           `[HARDWARE] Subterranean Node live streaming active.`
         ]);
         logEvent('normal', 'USB', 'ESP32 Subterranean Node connected via WebSerial (COM Port 115200 baud)');
+
+        // Initialize Bidirectional Serial Writer
+        const textEncoder = new TextEncoderStream();
+        textEncoder.readable.pipeTo(port.writable);
+        const writer = textEncoder.writable.getWriter();
+        serialWriterRef.current = writer;
 
         const textDecoder = new TextDecoderStream();
         port.readable.pipeTo(textDecoder.writable);
@@ -299,6 +317,7 @@ export default function App() {
       if (!isSirenActive) {
         sirenEngine.startSiren();
         setIsSirenActive(true);
+        sendSerialCommand('BUZZ_ON');
         logEvent('critical', 'NODE-01', 'CRITICAL STRATA RUPTURE DETECTED - AUTOMATED EVACUATION ENGAGED');
       }
     } else {
@@ -306,6 +325,7 @@ export default function App() {
       if (isSirenActive) {
         sirenEngine.stopSiren();
         setIsSirenActive(false);
+        sendSerialCommand('BUZZ_OFF');
         logEvent('normal', 'SYS', 'Working strata stabilized - Emergency siren silenced automatically.');
       }
     }
@@ -352,16 +372,18 @@ export default function App() {
     return () => clearInterval(interval);
   }, [maxTilt, maxCrack, maxCH4, maxCO, serialConnected, isSimStreamActive]);
 
-  // Siren toggle handler
+  // Siren toggle handler (Triggers both Browser Siren AND Physical ESP32 Hardware Buzzer)
   function handleToggleSiren() {
     if (isSirenActive) {
       sirenEngine.stopSiren();
       setIsSirenActive(false);
+      sendSerialCommand('BUZZ_OFF');
       logEvent('normal', 'OPERATOR', 'Emergency siren manually silenced by safety operator.');
     } else {
       sirenEngine.startSiren();
       setIsSirenActive(true);
-      logEvent('critical', 'OPERATOR', 'Manual acoustic siren test activated from command console.');
+      sendSerialCommand('BUZZ_TEST');
+      logEvent('critical', 'OPERATOR', 'Manual acoustic siren test activated from command console (Physical Buzzer Triggered).');
     }
   }
 

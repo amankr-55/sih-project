@@ -56,15 +56,45 @@ const unsigned long TELEMETRY_INTERVAL_MS = 350;
 unsigned long buzzerBeepUntil = 0;
 unsigned long nextAllowedBeep = 0;
 
-// Dual Active/Passive Buzzer Actuator
+// Universal Active / Passive Buzzer Actuator
+// 2-Pin Active Buzzer (Standard in 99% of Arduino/ESP32 kits) needs DC HIGH (3.3V) to oscillate!
+#define USE_ACTIVE_BUZZER_DC   true
+
 void buzzerOn() {
-  // Generates 2400Hz resonant audio wave (Works on both passive and active 2-pin buzzers)
-  tone(PIN_ALARM_BUZZER, 2400);
+  if (USE_ACTIVE_BUZZER_DC) {
+    digitalWrite(PIN_ALARM_BUZZER, HIGH); // Instant full-volume sound on active 2-pin buzzer!
+  } else {
+    tone(PIN_ALARM_BUZZER, 2400); // Passive buzzer fallback
+  }
 }
 
 void buzzerOff() {
-  noTone(PIN_ALARM_BUZZER);
   digitalWrite(PIN_ALARM_BUZZER, LOW);
+  noTone(PIN_ALARM_BUZZER);
+}
+
+// Process incoming command from USB Serial (Laptop WebSerial or Serial Monitor) & Bluetooth
+void processCommand(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+  if (cmd == "BUZZ_TEST" || cmd == "TEST" || cmd == "BEEP" || cmd == "1") {
+    Serial.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
+    SerialBT.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
+    for (int i = 0; i < 3; i++) {
+      digitalWrite(PIN_ALARM_BUZZER, HIGH);
+      delay(150);
+      digitalWrite(PIN_ALARM_BUZZER, LOW);
+      delay(100);
+    }
+  } else if (cmd == "BUZZ_ON" || cmd == "SIREN_ON") {
+    digitalWrite(PIN_ALARM_BUZZER, HIGH);
+    Serial.println("[BUZZER] Buzzer Forced ON");
+    SerialBT.println("[BUZZER] Buzzer Forced ON");
+  } else if (cmd == "BUZZ_OFF" || cmd == "SIREN_OFF") {
+    digitalWrite(PIN_ALARM_BUZZER, LOW);
+    Serial.println("[BUZZER] Buzzer Forced OFF");
+    SerialBT.println("[BUZZER] Buzzer Forced OFF");
+  }
 }
 
 void setup() {
@@ -106,14 +136,13 @@ void setup() {
     }
   }
 
-  // 2 crisp startup confirmation beeps (verifies buzzer hardware immediately!)
-  buzzerOn();
-  delay(120);
-  buzzerOff();
-  delay(80);
-  buzzerOn();
-  delay(120);
-  buzzerOff();
+  // 3 crisp startup confirmation beeps (verifies buzzer hardware immediately on USB plug-in!)
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(PIN_ALARM_BUZZER, HIGH);
+    delay(150);
+    digitalWrite(PIN_ALARM_BUZZER, LOW);
+    delay(90);
+  }
 
   // ================= AUTO-ZERO CALIBRATION =================
   // Samples table rest position for 1.2 seconds to set 0.00° baseline
@@ -270,6 +299,16 @@ void loop() {
 
     Serial.println(packet);
     SerialBT.println(packet);
+  }
+
+  // 8. Listen for incoming commands from Laptop WebSerial / Serial Monitor / Bluetooth
+  while (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    processCommand(cmd);
+  }
+  while (SerialBT.available() > 0) {
+    String cmd = SerialBT.readStringUntil('\n');
+    processCommand(cmd);
   }
 
   // FreeRTOS CPU sleep yield (Allows core to enter idle power-saving state, drops heat by ~40%)
