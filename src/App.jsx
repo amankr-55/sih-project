@@ -75,7 +75,7 @@ export default function App() {
   const [fontTheme, setFontTheme] = useState('inter');
   const [effect3DTheme, setEffect3DTheme] = useState('sensor-sync');
   const [isThemeCustomizerOpen, setIsThemeCustomizerOpen] = useState(false);
-  const [isSimStreamActive, setIsSimStreamActive] = useState(false);
+  const [isSimStreamActive, setIsSimStreamActive] = useState(true);
   const activeSelectedNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
   const [isSirenActive, setIsSirenActive] = useState(false);
   const [currentShift, setCurrentShift] = useState('Shift-A');
@@ -83,11 +83,19 @@ export default function App() {
   const [hardwareMode, setHardwareMode] = useState('simulation');
   const [isDgmsModalOpen, setIsDgmsModalOpen] = useState(false);
   const [serialConnected, setSerialConnected] = useState(false);
+  const [serialToast, setSerialToast] = useState(null);
   const [serialLogs, setSerialLogs] = useState([
     '[INIT] Web Serial Controller ready.',
     '[READY] Plug ESP32 via USB (COM Port) or pair via Bluetooth SPP. Click Connect.'
   ]);
   const [thresholds, setThresholds] = useState({ ...DGMS_THRESHOLDS });
+
+  useEffect(() => {
+    if (serialToast) {
+      const timer = setTimeout(() => setSerialToast(null), 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [serialToast]);
 
   const serialWriterRef = useRef(null);
 
@@ -109,6 +117,12 @@ export default function App() {
         await port.open({ baudRate: 115200 });
         setSerialConnected(true);
         setHardwareMode('hardware');
+        setIsSimStreamActive(false);
+        setSerialToast({
+          type: 'success',
+          title: 'ESP32 Connected!',
+          message: 'Live hardware sensor data streaming at 115200 baud.'
+        });
         setSerialLogs(prev => [
           ...prev.slice(-25),
           `[SUCCESS] Connected to USB Serial Port at 115200 baud!`,
@@ -156,11 +170,28 @@ export default function App() {
       } catch (err) {
         console.error('Serial port error:', err);
         setSerialConnected(false);
+        setHardwareMode('simulation');
         setSerialLogs(prev => [...prev.slice(-25), `[ERROR] Serial Port: ${err.message}`]);
         logEvent('advisory', 'USB', `WebSerial connection: ${err.message}`);
+
+        let userTip = err.message;
+        if (err.message && (err.message.includes('Failed to open') || err.name === 'NetworkError')) {
+          userTip = 'COM Port is busy! Please CLOSE the Serial Monitor in Arduino IDE (Ctrl+Shift+M), then click Connect again.';
+        } else if (err.name === 'NotFoundError' || err.message?.includes('No port selected')) {
+          userTip = 'No port was selected by user.';
+        }
+        setSerialToast({
+          type: 'error',
+          title: 'Serial Connection Notice',
+          message: userTip
+        });
       }
     } else {
-      alert('WebSerial is natively supported in Google Chrome, Microsoft Edge, and Opera!');
+      setSerialToast({
+        type: 'error',
+        title: 'Browser Unsupported',
+        message: 'WebSerial is natively supported in Google Chrome, Microsoft Edge, and Opera!'
+      });
     }
   }
 
@@ -920,6 +951,37 @@ export default function App() {
         current3DEffectTheme={effect3DTheme}
         onSelect3DEffectTheme={setEffect3DTheme}
       />
+
+      {/* Real-time Hardware Serial Connection Floating Toast Notification */}
+      {serialToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md animate-slide-in">
+          <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-xl ${
+            serialToast.type === 'success'
+              ? 'bg-emerald-950/95 border-emerald-500/80 text-emerald-100 shadow-emerald-950/80'
+              : 'bg-rose-950/95 border-rose-500/80 text-rose-100 shadow-rose-950/80'
+          }`}>
+            <div className={`p-2 rounded-xl text-lg ${
+              serialToast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+            }`}>
+              {serialToast.type === 'success' ? '🟢' : '⚠️'}
+            </div>
+            <div className="flex-1 text-left">
+              <div className="text-sm font-black tracking-wide font-mono">
+                {serialToast.title}
+              </div>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                {serialToast.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setSerialToast(null)}
+              className="text-slate-400 hover:text-white text-xs font-mono font-bold p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
