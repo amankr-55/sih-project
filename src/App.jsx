@@ -97,100 +97,153 @@ export default function App() {
     }
   }, [serialToast]);
 
-  const serialWriterRef = useRef(null);
+  const portRef = useRef(null);
+  const readerRef = useRef(null);
+  const keepReadingRef = useRef(false);
 
   async function sendSerialCommand(cmd) {
-    if (serialWriterRef.current) {
+    if (portRef.current && portRef.current.writable) {
       try {
-        await serialWriterRef.current.write(`${cmd}\n`);
+        const writer = portRef.current.writable.getWriter();
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(`${cmd}\n`));
+        writer.releaseLock();
       } catch (e) {
         console.warn('WebSerial send error:', e);
       }
     }
   }
 
+  async function handleDisconnectSerial() {
+    keepReadingRef.current = false;
+    try {
+      if (readerRef.current) {
+        await readerRef.current.cancel();
+      }
+    } catch (e) {
+      // ignore cancel error
+    }
+    try {
+      if (portRef.current) {
+        await portRef.current.close();
+      }
+    } catch (e) {
+      // ignore close error
+    }
+    portRef.current = null;
+    readerRef.current = null;
+    setSerialConnected(false);
+    setHardwareMode('simulation');
+    setIsSimStreamActive(true);
+    setSerialToast({
+      type: 'info',
+      title: 'ESP32 Disconnected',
+      message: 'Switched back to simulation demo stream.'
+    });
+    setSerialLogs(prev => [...prev.slice(-25), '[INFO] Disconnected from ESP32.']);
+  }
+
   // WebSerial API handler for live physical ESP32 streaming
   async function handleConnectSerial() {
-    if ('serial' in navigator) {
-      try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 115200 });
-        setSerialConnected(true);
-        setHardwareMode('hardware');
-        setIsSimStreamActive(false);
-        setSerialToast({
-          type: 'success',
-          title: 'ESP32 Connected!',
-          message: 'Live hardware sensor data streaming at 115200 baud.'
-        });
-        setSerialLogs(prev => [
-          ...prev.slice(-25),
-          `[SUCCESS] Connected to USB Serial Port at 115200 baud!`,
-          `[HARDWARE] Subterranean Node live streaming active.`
-        ]);
-        logEvent('normal', 'USB', 'ESP32 Subterranean Node connected via WebSerial (COM Port 115200 baud)');
+    if (serialConnected) {
+      await handleDisconnectSerial();
+      return;
+    }
 
-        // Initialize Bidirectional Serial Writer
-        const textEncoder = new TextEncoderStream();
-        textEncoder.readable.pipeTo(port.writable);
-        const writer = textEncoder.writable.getWriter();
-        serialWriterRef.current = writer;
+    if (!('serial' in navigator)) {
+      setSerialToast({
+        type: 'error',
+        title: 'Browser Unsupported',
+        message: 'WebSerial is natively supported in Google Chrome, Microsoft Edge, and Opera!'
+      });
+      return;
+    }
 
-        const textDecoder = new TextDecoderStream();
-        port.readable.pipeTo(textDecoder.writable);
-        const reader = textDecoder.readable.getReader();
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      portRef.current = port;
+      keepReadingRef.current = true;
+      setSerialConnected(true);
+      setHardwareMode('hardware');
+      setIsSimStreamActive(false);
+      setSerialToast({
+        type: 'success',
+        title: 'ESP32 Connected!',
+        message: 'Live hardware sensor data streaming at 115200 baud.'
+      });
+      setSerialLogs(prev => [
+        ...prev.slice(-25),
+        `[SUCCESS] Connected to USB Serial Port at 115200 baud!`,
+        `[HARDWARE] Subterranean Node live streaming active.`
+      ]);
+      logEvent('normal', 'USB', 'ESP32 Subterranean Node connected via WebSerial (COM Port 115200 baud)');
 
-        let lineBuffer = '';
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            reader.releaseLock();
-            break;
-          }
-          if (value) {
-            lineBuffer += value;
-            const lines = lineBuffer.split('\n');
-            lineBuffer = lines.pop();
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed) {
+      const decoder = new TextDecoder();
+      let lineBuffer = '';
+
+      while (port.readable && keepReadingRef.current) {
+        const reader = port.readable.getReader();
+        readerRef.current = reader;
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+              lineBuffer += decoder.decode(value, { stream: true });
+              const lines = lineBuffer.split('\n');
+              lineBuffer = lines.pop(); // keep partial line in buffer
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
                 setSerialLogs(prev => [...prev.slice(-25), `[RX] ${trimmed}`]);
-                if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+
+                // Extract valid JSON packet
+                const startIdx = trimmed.indexOf('{');
+                const endIdx = trimmed.lastIndexOf('}');
+                if (startIdx !== -1 && endIdx > startIdx) {
                   try {
-                    const data = JSON.parse(trimmed);
+                    const jsonStr = trimmed.substring(startIdx, endIdx + 1);
+                    const data = JSON.parse(jsonStr);
                     handleHardwareTelemetry(data);
                   } catch (e) {
-                    // ignore incomplete JSON
+                    // ignore corrupted chunk
                   }
                 }
               }
             }
           }
+        } catch (readErr) {
+          if (keepReadingRef.current) {
+            console.error('Serial stream read error:', readErr);
+          }
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch (e) {
+            // ignore lock release error
+          }
+          readerRef.current = null;
         }
-      } catch (err) {
-        console.error('Serial port error:', err);
-        setSerialConnected(false);
-        setHardwareMode('simulation');
-        setSerialLogs(prev => [...prev.slice(-25), `[ERROR] Serial Port: ${err.message}`]);
-        logEvent('advisory', 'USB', `WebSerial connection: ${err.message}`);
-
-        let userTip = err.message;
-        if (err.message && (err.message.includes('Failed to open') || err.name === 'NetworkError')) {
-          userTip = 'COM Port is busy! Please CLOSE the Serial Monitor in Arduino IDE (Ctrl+Shift+M), then click Connect again.';
-        } else if (err.name === 'NotFoundError' || err.message?.includes('No port selected')) {
-          userTip = 'No port was selected by user.';
-        }
-        setSerialToast({
-          type: 'error',
-          title: 'Serial Connection Notice',
-          message: userTip
-        });
       }
-    } else {
+    } catch (err) {
+      console.error('Serial port error:', err);
+      setSerialConnected(false);
+      setHardwareMode('simulation');
+      setSerialLogs(prev => [...prev.slice(-25), `[ERROR] Serial Port: ${err.message}`]);
+      logEvent('advisory', 'USB', `WebSerial connection: ${err.message}`);
+
+      let userTip = err.message;
+      if (err.message && (err.message.includes('Failed to open') || err.name === 'NetworkError')) {
+        userTip = 'COM Port is busy! Please CLOSE the Serial Monitor in Arduino IDE (Ctrl+Shift+M), then click Connect again.';
+      } else if (err.name === 'NotFoundError' || err.message?.includes('No port selected')) {
+        userTip = 'No port was selected by user.';
+      }
       setSerialToast({
         type: 'error',
-        title: 'Browser Unsupported',
-        message: 'WebSerial is natively supported in Google Chrome, Microsoft Edge, and Opera!'
+        title: 'Serial Connection Notice',
+        message: userTip
       });
     }
   }
