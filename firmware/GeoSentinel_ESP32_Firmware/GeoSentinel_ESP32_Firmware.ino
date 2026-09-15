@@ -35,9 +35,10 @@ const float THRESH_TILT_CRITICAL     = 3.80; // degrees
 const float THRESH_VIB_CRITICAL      = 0.35; // g-force (Exceeds mining baseline)
 const float THRESH_CRACK_CRITICAL    = 1.50; // mm
 
-// MPU-6050 I2C Configuration
-const int MPU_ADDR = 0x68;
+// MPU-6050 I2C Configuration (Dynamic address resolution for 0x68 / 0x69)
+uint8_t mpuAddress = 0x68;
 bool mpuConnected = false;
+unsigned long lastMpuRetryTime = 0;
 
 // Auto-Zero Calibration Baseline
 float baseAx = 0.0, baseAy = 0.0, baseAz = 1.0;
@@ -73,6 +74,97 @@ void buzzerOff() {
   noTone(PIN_ALARM_BUZZER);
 }
 
+// Low-level MPU-6050 Register Initializer
+bool tryInitMPU(uint8_t addr) {
+  // Test communication
+  Wire.beginTransmission(addr);
+  Wire.write(0x6B); // PWR_MGMT_1
+  Wire.write(0x00); // Wake up device
+  if (Wire.endTransmission() != 0) return false;
+
+  delay(10);
+
+  // Set clock source to Auto-Select best available (PLL with Gyro X)
+  Wire.beginTransmission(addr);
+  Wire.write(0x6B);
+  Wire.write(0x01);
+  Wire.endTransmission();
+
+  // Set DLPF (Digital Low Pass Filter) to 44Hz (smooths mechanical vibration noise)
+  Wire.beginTransmission(addr);
+  Wire.write(0x1A); // CONFIG
+  Wire.write(0x03);
+  Wire.endTransmission();
+
+  // Accelerometer Config: +/- 2g range
+  Wire.beginTransmission(addr);
+  Wire.write(0x1C); // ACCEL_CONFIG
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+  mpuAddress = addr;
+  return true;
+}
+
+// Full I2C Bus Scanner & Auto-Detection
+bool scanAndConnectMPU() {
+  // Priority 1: Check primary 0x68 (AD0 connected to GND or default)
+  if (tryInitMPU(0x68)) {
+    mpuAddress = 0x68;
+    return true;
+  }
+  // Priority 2: Check alternate 0x69 (AD0 connected to 3.3V/VCC or floating)
+  if (tryInitMPU(0x69)) {
+    mpuAddress = 0x69;
+    return true;
+  }
+  // Priority 3: Scan all valid 7-bit addresses
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    if (addr == 0x68 || addr == 0x69) continue;
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      if (tryInitMPU(addr)) {
+        mpuAddress = addr;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void calibrateMPU() {
+  Serial.printf("[CALIB] Locking rest baseline on I2C 0x%02X. Keep sensor still...\n", mpuAddress);
+  float sumX = 0, sumY = 0, sumZ = 0;
+  int samples = 30;
+  int validSamples = 0;
+
+  for (int i = 0; i < samples; i++) {
+    Wire.beginTransmission(mpuAddress);
+    Wire.write(0x3B);
+    if (Wire.endTransmission(false) == 0) {
+      if (Wire.requestFrom((int)mpuAddress, 6, (int)true) >= 6) {
+        int16_t rx = (Wire.read() << 8) | Wire.read();
+        int16_t ry = (Wire.read() << 8) | Wire.read();
+        int16_t rz = (Wire.read() << 8) | Wire.read();
+        sumX += rx / 16384.0;
+        sumY += ry / 16384.0;
+        sumZ += rz / 16384.0;
+        validSamples++;
+      }
+    }
+    delay(30);
+  }
+
+  if (validSamples > 0) {
+    baseAx = sumX / validSamples;
+    baseAy = sumY / validSamples;
+    baseAz = sumZ / validSamples;
+    baseNorm = sqrt(baseAx * baseAx + baseAy * baseAy + baseAz * baseAz);
+    if (baseNorm < 0.1) baseNorm = 1.0;
+    Serial.println("[CALIB] Baseline locked! Rest position zeroed at 0.00 deg.");
+  }
+}
+
 // Process incoming command from USB Serial (Laptop WebSerial or Serial Monitor) & Bluetooth
 void processCommand(String cmd) {
   cmd.trim();
@@ -94,6 +186,8 @@ void processCommand(String cmd) {
     digitalWrite(PIN_ALARM_BUZZER, LOW);
     Serial.println("[BUZZER] Buzzer Forced OFF");
     if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Buzzer Forced OFF");
+  } else if (cmd == "CALIB" || cmd == "ZERO") {
+    calibrateMPU();
   }
 }
 
@@ -109,69 +203,27 @@ void setup() {
   pinMode(PIN_ALARM_BUZZER, OUTPUT);
   digitalWrite(PIN_ALARM_BUZZER, LOW);
 
-  // Initialize I2C Bus at standard safe 100kHz clock (Low bus strain)
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
-  delay(100);
-
-  // Wake up MPU-6050 from sleep mode
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x6B); // PWR_MGMT_1 register
-  Wire.write(0x00); // Set to 0 (wakes up MPU-6050)
-  byte err = Wire.endTransmission();
-
-  if (err == 0) {
-    mpuConnected = true;
-    Serial.println("\n[OK] MPU-6050 Sensor Detected & Initialized on I2C 0x68");
-  } else {
-    // Try alternate address 0x69
-    Wire.beginTransmission(0x69);
-    Wire.write(0x6B);
-    Wire.write(0x00);
-    if (Wire.endTransmission() == 0) {
-      mpuConnected = true;
-      Serial.println("\n[OK] MPU-6050 Sensor Detected on Alternate I2C 0x69");
-    } else {
-      mpuConnected = false;
-      Serial.println("\n[WARN] MPU-6050 not responding. Using calibrated fallback.");
-    }
-  }
-
   // 3 crisp startup confirmation beeps (verifies buzzer hardware immediately on USB plug-in!)
   for (int i = 0; i < 3; i++) {
     digitalWrite(PIN_ALARM_BUZZER, HIGH);
-    delay(150);
+    delay(120);
     digitalWrite(PIN_ALARM_BUZZER, LOW);
-    delay(90);
+    delay(80);
   }
 
-  // ================= AUTO-ZERO CALIBRATION =================
-  // Samples table rest position for 1.2 seconds to set 0.00° baseline
-  if (mpuConnected) {
-    Serial.println("[CALIB] Calibrating table rest baseline. Keep sensor still...");
-    float sumX = 0, sumY = 0, sumZ = 0;
-    int samples = 25;
-    for (int i = 0; i < samples; i++) {
-      int16_t rx, ry, rz;
-      Wire.beginTransmission(MPU_ADDR);
-      Wire.write(0x3B);
-      Wire.endTransmission(false);
-      Wire.requestFrom(MPU_ADDR, 6, true);
-      if (Wire.available() >= 6) {
-        rx = (Wire.read() << 8) | Wire.read();
-        ry = (Wire.read() << 8) | Wire.read();
-        rz = (Wire.read() << 8) | Wire.read();
-        sumX += rx / 16384.0;
-        sumY += ry / 16384.0;
-        sumZ += rz / 16384.0;
-      }
-      delay(40);
-    }
-    baseAx = sumX / samples;
-    baseAy = sumY / samples;
-    baseAz = sumZ / samples;
-    baseNorm = sqrt(baseAx * baseAx + baseAy * baseAy + baseAz * baseAz);
-    if (baseNorm < 0.1) baseNorm = 1.0;
-    Serial.println("[CALIB] Baseline locked! Rest position zeroed at 0.00 deg.");
+  // Initialize I2C Bus on GPIO 21 (SDA) and GPIO 22 (SCL)
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
+  Wire.setTimeOut(200);
+  delay(150);
+
+  // Auto-Detect MPU-6050 on I2C
+  if (scanAndConnectMPU()) {
+    mpuConnected = true;
+    Serial.printf("\n[OK] MPU-6050 Sensor Detected & Initialized on I2C 0x%02X!\n", mpuAddress);
+    calibrateMPU();
+  } else {
+    mpuConnected = false;
+    Serial.println("\n[WARN] MPU-6050 not responding on I2C. Auto-recovery active in background.");
   }
 }
 
@@ -182,24 +234,35 @@ void loop() {
   float rawAx = 0, rawAy = 0, rawAz = 1.0;
   float tempC = 25.0;
 
+  // Auto-Reconnect if sensor was disconnected or wire was loose
+  if (!mpuConnected && (now - lastMpuRetryTime > 1500)) {
+    lastMpuRetryTime = now;
+    if (scanAndConnectMPU()) {
+      mpuConnected = true;
+      Serial.printf("[RECONNECT] MPU-6050 Restored on I2C 0x%02X!\n", mpuAddress);
+      calibrateMPU();
+    }
+  }
+
   if (mpuConnected) {
-    Wire.beginTransmission(MPU_ADDR);
+    Wire.beginTransmission(mpuAddress);
     Wire.write(0x3B); // ACCEL_XOUT_H
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU_ADDR, 8, true); // 6 bytes Accel + 2 bytes Temp
+    if (Wire.endTransmission(false) == 0) {
+      if (Wire.requestFrom((int)mpuAddress, 8, (int)true) >= 8) {
+        int16_t x = (Wire.read() << 8) | Wire.read();
+        int16_t y = (Wire.read() << 8) | Wire.read();
+        int16_t z = (Wire.read() << 8) | Wire.read();
+        int16_t rawTemp = (Wire.read() << 8) | Wire.read();
 
-    if (Wire.available() >= 8) {
-      int16_t x = (Wire.read() << 8) | Wire.read();
-      int16_t y = (Wire.read() << 8) | Wire.read();
-      int16_t z = (Wire.read() << 8) | Wire.read();
-      int16_t rawTemp = (Wire.read() << 8) | Wire.read();
+        rawAx = x / 16384.0;
+        rawAy = y / 16384.0;
+        rawAz = z / 16384.0;
 
-      rawAx = x / 16384.0;
-      rawAy = y / 16384.0;
-      rawAz = z / 16384.0;
-
-      // MPU-6050 accurate internal die temperature formula
-      tempC = (rawTemp / 340.0) + 36.53;
+        // MPU-6050 accurate internal die temperature formula
+        tempC = (rawTemp / 340.0) + 36.53;
+      }
+    } else {
+      mpuConnected = false;
     }
   }
 
