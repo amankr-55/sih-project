@@ -79,7 +79,7 @@ void processCommand(String cmd) {
   cmd.toUpperCase();
   if (cmd == "BUZZ_TEST" || cmd == "TEST" || cmd == "BEEP" || cmd == "1") {
     Serial.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
-    SerialBT.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
+    if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
     for (int i = 0; i < 3; i++) {
       digitalWrite(PIN_ALARM_BUZZER, HIGH);
       delay(150);
@@ -89,11 +89,11 @@ void processCommand(String cmd) {
   } else if (cmd == "BUZZ_ON" || cmd == "SIREN_ON") {
     digitalWrite(PIN_ALARM_BUZZER, HIGH);
     Serial.println("[BUZZER] Buzzer Forced ON");
-    SerialBT.println("[BUZZER] Buzzer Forced ON");
+    if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Buzzer Forced ON");
   } else if (cmd == "BUZZ_OFF" || cmd == "SIREN_OFF") {
     digitalWrite(PIN_ALARM_BUZZER, LOW);
     Serial.println("[BUZZER] Buzzer Forced OFF");
-    SerialBT.println("[BUZZER] Buzzer Forced OFF");
+    if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Buzzer Forced OFF");
   }
 }
 
@@ -298,7 +298,9 @@ void loop() {
     packet += "}";
 
     Serial.println(packet);
-    SerialBT.println(packet);
+    if (SerialBT.hasClient()) {
+      SerialBT.println(packet);
+    }
   }
 
   // 8. Listen for incoming commands from Laptop WebSerial / Serial Monitor / Bluetooth
