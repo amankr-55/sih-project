@@ -25,15 +25,15 @@ BluetoothSerial SerialBT;
 #define I2C_SCL_PIN          22    // GPIO22 (SCL) -> MPU-6050 SCL
 #define PIN_ALARM_BUZZER     18    // GPIO18 (PWM/Digital) -> Active Buzzer (+)
 
-// ================= DGMS & MINING SAFETY THRESHOLDS =================
-// Normal mining machinery & continuous drill vibration limit:
-const float MINING_MAX_MACHINERY_VIB = 0.18; // g-force (Normal mining ambient)
+// ================= DGMS & MINING SAFETY THRESHOLDS (TUNED FOR DEMO & REAL DEFORMATION) =================
+// Normal mining machinery & ambient threshold:
+const float MINING_MAX_MACHINERY_VIB = 0.12; // g-force
 
-// Genuine Strata Rupture / Seismic Shock Thresholds:
-const float THRESH_TILT_ADVISORY     = 2.20; // degrees
-const float THRESH_TILT_CRITICAL     = 3.80; // degrees
-const float THRESH_VIB_CRITICAL      = 0.35; // g-force (Exceeds mining baseline)
-const float THRESH_CRACK_CRITICAL    = 1.50; // mm
+// Ultra-Sensitive Strata Rupture / Seismic Shock Demo Thresholds:
+const float THRESH_TILT_ADVISORY     = 1.20; // degrees (Easy to trigger in live demo by slight hand tilt)
+const float THRESH_TILT_CRITICAL     = 2.60; // degrees (Triggers loud siren & red critical state)
+const float THRESH_VIB_CRITICAL      = 0.25; // g-force (Triggers on table tap / shake)
+const float THRESH_CRACK_CRITICAL    = 0.80; // mm
 
 // MPU-6050 I2C Configuration (Dynamic address resolution for 0x68 / 0x69)
 uint8_t mpuAddress = 0x68;
@@ -43,6 +43,7 @@ unsigned long lastMpuRetryTime = 0;
 // Auto-Zero Calibration Baseline
 float baseAx = 0.0, baseAy = 0.0, baseAz = 1.0;
 float baseNorm = 1.0;
+bool calibrationDone = false;
 
 // Peak detection for vibration frequency estimation
 unsigned long lastPeakTime = 0;
@@ -74,15 +75,28 @@ void buzzerOff() {
   noTone(PIN_ALARM_BUZZER);
 }
 
-// Low-level MPU-6050 Register Initializer
+// I2C Hardware Bus Recovery (Clears stuck SDA line if sensor was hot-plugged)
+void recoverI2CBus() {
+  pinMode(I2C_SDA_PIN, INPUT_PULLUP);
+  pinMode(I2C_SCL_PIN, OUTPUT);
+  digitalWrite(I2C_SCL_PIN, HIGH);
+  delayMicroseconds(10);
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(I2C_SCL_PIN, LOW);
+    delayMicroseconds(10);
+    digitalWrite(I2C_SCL_PIN, HIGH);
+    delayMicroseconds(10);
+  }
+}
+
+// Low-level MPU-6050 / MPU-6500 / ICM Register Initializer
 bool tryInitMPU(uint8_t addr) {
-  // Test communication
   Wire.beginTransmission(addr);
-  Wire.write(0x6B); // PWR_MGMT_1
-  Wire.write(0x00); // Wake up device
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0x00); // Wake up device from sleep
   if (Wire.endTransmission() != 0) return false;
 
-  delay(10);
+  delay(15);
 
   // Set clock source to Auto-Select best available (PLL with Gyro X)
   Wire.beginTransmission(addr);
@@ -90,7 +104,7 @@ bool tryInitMPU(uint8_t addr) {
   Wire.write(0x01);
   Wire.endTransmission();
 
-  // Set DLPF (Digital Low Pass Filter) to 44Hz (smooths mechanical vibration noise)
+  // Set DLPF (Digital Low Pass Filter) to 44Hz (smooths noise)
   Wire.beginTransmission(addr);
   Wire.write(0x1A); // CONFIG
   Wire.write(0x03);
@@ -99,6 +113,12 @@ bool tryInitMPU(uint8_t addr) {
   // Accelerometer Config: +/- 2g range
   Wire.beginTransmission(addr);
   Wire.write(0x1C); // ACCEL_CONFIG
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+  // Gyro Config: +/- 250 deg/s
+  Wire.beginTransmission(addr);
+  Wire.write(0x1B); // GYRO_CONFIG
   Wire.write(0x00);
   Wire.endTransmission();
 
@@ -211,6 +231,9 @@ void setup() {
     delay(80);
   }
 
+  // Pre-flight I2C Bus Clean / Recovery (Clears stuck SDA line)
+  recoverI2CBus();
+
   // Initialize I2C Bus on GPIO 21 (SDA) and GPIO 22 (SCL)
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
   Wire.setTimeOut(200);
@@ -223,7 +246,7 @@ void setup() {
     calibrateMPU();
   } else {
     mpuConnected = false;
-    Serial.println("\n[WARN] MPU-6050 not responding on I2C. Auto-recovery active in background.");
+    Serial.println("\n[WARN] MPU-6050 not responding on I2C (Check GPIO 21/22 & VCC). Auto-recovery active in background.");
   }
 }
 
@@ -235,8 +258,10 @@ void loop() {
   float tempC = 25.0;
 
   // Auto-Reconnect if sensor was disconnected or wire was loose
-  if (!mpuConnected && (now - lastMpuRetryTime > 1500)) {
+  if (!mpuConnected && (now - lastMpuRetryTime > 1200)) {
     lastMpuRetryTime = now;
+    recoverI2CBus();
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
     if (scanAndConnectMPU()) {
       mpuConnected = true;
       Serial.printf("[RECONNECT] MPU-6050 Restored on I2C 0x%02X!\n", mpuAddress);
@@ -290,17 +315,18 @@ void loop() {
   // Using Vector Dot Product: angle = acos( (A . B) / (|A|*|B|) )
   float dot = (rawAx * baseAx + rawAy * baseAy + rawAz * baseAz);
   float currentNorm = totalAccMag;
+  if (currentNorm < 0.1) currentNorm = 1.0;
   float cosAngle = dot / (currentNorm * baseNorm);
   if (cosAngle > 1.0) cosAngle = 1.0;
   if (cosAngle < -1.0) cosAngle = -1.0;
   float tiltDegrees = acos(cosAngle) * 180.0 / 3.14159265;
-  if (tiltDegrees < 0.25) tiltDegrees = 0.00; // Zero deadband at rest
+  if (tiltDegrees < 0.05) tiltDegrees = 0.00; // Ultra-fine zero deadband
 
   // 4. Derive Real Geotechnical Crack Dilation from Physical Rock Shear
   // Crack (mm) = Tilt shear strain + dynamic vibration shock
-  float simulatedCrackMm = (tiltDegrees * 0.08) + (dynamicVibG * 1.5);
-  if (simulatedCrackMm > 5.0) simulatedCrackMm = 5.0;
-  if (tiltDegrees < 0.3 && dynamicVibG < 0.05) simulatedCrackMm = 0.00;
+  float simulatedCrackMm = (tiltDegrees * 0.15) + (dynamicVibG * 2.0);
+  if (simulatedCrackMm > 6.0) simulatedCrackMm = 6.0;
+  if (tiltDegrees < 0.1 && dynamicVibG < 0.04) simulatedCrackMm = 0.00;
 
   // 5. Mining Safety Logic: Distinguish Mining Machinery vs Genuine Strata Rupture
   // If vibration is under 0.22g and tilt under 2.5 deg, treat as normal mining activity
