@@ -4,14 +4,13 @@
    Team: Green ThinkerX | Author: Aman Kumar
    Platform: ESP32 DevKit V1 (30-Pin)
    
-   DEEP RESEARCH GRADE SENSING ENGINE:
-   - InvenSense Burst-Read (14 Registers: Accel X/Y/Z, Temp, Gyro X/Y/Z)
-   - Complementary Filter (Gyro Integration + Accelerometer Fusion)
-   - Real-time 0-Lag Smooth Pitch & Roll Kinematics
+   ZERO-DRIFT ROCK SOLID INCLINOMETER & SEISMIC SENSING ENGINE:
+   - Zero-Drift Exponential Moving Average (EMA) Gravity Inclinometer
+   - Returns to 0.00° immediately when placed flat (No infinite runaway!)
+   - Instant Buzzer Shutoff when returned to normal/flat position
    - Dynamic G-Force Vibration Sensing
-   - AD0 Dynamic Address Handling (0x68 / 0x69)
-   - Auto-Zero Table Baseline
-   - Active Buzzer Alarm on GPIO 18
+   - I2C Auto-Recovery & Multi-Address Support (0x68 / 0x69)
+   - Telemetry Stream: 250ms (~4Hz)
   ============================================================================
 */
 
@@ -28,30 +27,29 @@ BluetoothSerial SerialBT;
 
 // ================= DGMS & DEMO SENSITIVITY THRESHOLDS =================
 const float MINING_MAX_MACHINERY_VIB = 0.12; // g-force
-const float THRESH_TILT_ADVISORY     = 1.20; // degrees
-const float THRESH_TILT_CRITICAL     = 2.60; // degrees
-const float THRESH_VIB_CRITICAL      = 0.25; // g-force
-const float THRESH_CRACK_CRITICAL    = 0.80; // mm
+const float THRESH_TILT_ADVISORY     = 1.30; // degrees (Triggers yellow alert)
+const float THRESH_TILT_CRITICAL     = 2.80; // degrees (Triggers red alert & buzzer)
+const float THRESH_VIB_CRITICAL      = 0.28; // g-force
+const float THRESH_CRACK_CRITICAL    = 0.85; // mm
 
 // MPU-6050 I2C Configuration
 uint8_t mpuAddress = 0x68;
 bool mpuConnected = false;
 unsigned long lastMpuRetryTime = 0;
 
-// Filter & Kinematic State
-float filteredPitch = 0.0;
-float filteredRoll  = 0.0;
+// Filtered Inclinometer State (Smooth EMA Filter - ZERO DRIFT)
+float smoothPitch   = 0.0;
+float smoothRoll    = 0.0;
 float basePitch     = 0.0;
 float baseRoll      = 0.0;
 bool isCalibrated   = false;
-unsigned long lastFilterTime = 0;
 
 // Peak detection for vibration frequency
 unsigned long lastPeakTime = 0;
 float prevVib = 0.0;
 float currentFrequencyHz = 0.0;
 
-// Telemetry Timing: 250ms (~4 packets/sec for ultra-smooth live graphs)
+// Telemetry Timing: 250ms
 unsigned long lastTelemetryTime = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 250;
 
@@ -67,7 +65,7 @@ void buzzerOff() {
   digitalWrite(PIN_ALARM_BUZZER, LOW);
 }
 
-// Clear I2C Bus if stuck
+// Clear I2C Bus
 void recoverI2CBus() {
   pinMode(I2C_SDA_PIN, INPUT_PULLUP);
   pinMode(I2C_SCL_PIN, OUTPUT);
@@ -83,34 +81,27 @@ void recoverI2CBus() {
 
 // Low-level MPU-6050 / MPU-6500 Initializer
 bool tryInitMPU(uint8_t addr) {
-  // 1. Wake up from sleep
   Wire.beginTransmission(addr);
   Wire.write(0x6B); // PWR_MGMT_1
-  Wire.write(0x00); // Clear sleep bit
+  Wire.write(0x00); // Wake up device
   if (Wire.endTransmission() != 0) return false;
   delay(15);
 
-  // 2. Select Auto Clock (PLL with X-axis Gyro)
+  // Auto-Select clock
   Wire.beginTransmission(addr);
   Wire.write(0x6B);
   Wire.write(0x01);
   Wire.endTransmission();
 
-  // 3. Set DLPF (Digital Low Pass Filter) to 44Hz (smooths mechanical noise)
+  // Set DLPF to 44Hz (filters high-frequency mechanical drill noise)
   Wire.beginTransmission(addr);
   Wire.write(0x1A); // CONFIG
   Wire.write(0x03);
   Wire.endTransmission();
 
-  // 4. Set Accelerometer +/- 2g range (16384 LSB/g)
+  // Set Accelerometer to +/- 2g range (16384 LSB/g)
   Wire.beginTransmission(addr);
   Wire.write(0x1C); // ACCEL_CONFIG
-  Wire.write(0x00);
-  Wire.endTransmission();
-
-  // 5. Set Gyroscope +/- 250 deg/s (131 LSB/deg/s)
-  Wire.beginTransmission(addr);
-  Wire.write(0x1B); // GYRO_CONFIG
   Wire.write(0x00);
   Wire.endTransmission();
 
@@ -118,7 +109,7 @@ bool tryInitMPU(uint8_t addr) {
   return true;
 }
 
-// Auto-scan and connect to MPU (0x68 / 0x69 / all addresses)
+// Auto-scan and connect to MPU (0x68 / 0x69)
 bool scanAndConnectMPU() {
   if (tryInitMPU(0x68)) { mpuAddress = 0x68; return true; }
   if (tryInitMPU(0x69)) { mpuAddress = 0x69; return true; }
@@ -134,7 +125,7 @@ bool scanAndConnectMPU() {
 
 // Auto-Zero Table Baseline Calibration
 void calibrateMPU() {
-  Serial.printf("[CALIB] Locking table baseline on I2C 0x%02X... Keep sensor still!\n", mpuAddress);
+  Serial.printf("[CALIB] Locking rest baseline on I2C 0x%02X... Keep sensor still on table!\n", mpuAddress);
   float sumP = 0, sumR = 0;
   int validSamples = 0;
 
@@ -160,11 +151,11 @@ void calibrateMPU() {
   }
 
   if (validSamples > 0) {
-    basePitch = sumP / validSamples;
-    baseRoll  = sumR / validSamples;
-    filteredPitch = basePitch;
-    filteredRoll  = baseRoll;
-    isCalibrated  = true;
+    basePitch   = sumP / validSamples;
+    baseRoll    = sumR / validSamples;
+    smoothPitch = basePitch;
+    smoothRoll  = baseRoll;
+    isCalibrated = true;
     Serial.printf("[CALIB] Baseline Locked! (Base Pitch: %.2f | Base Roll: %.2f). Rest = 0.00 deg.\n", basePitch, baseRoll);
   }
 }
@@ -174,18 +165,18 @@ void processCommand(String cmd) {
   cmd.trim();
   cmd.toUpperCase();
   if (cmd == "BUZZ_TEST" || cmd == "TEST" || cmd == "BEEP" || cmd == "1") {
-    Serial.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
+    Serial.println("[BUZZER] Manual Buzzer Test Triggered!");
     for (int i = 0; i < 3; i++) {
-      digitalWrite(PIN_ALARM_BUZZER, HIGH);
+      buzzerOn();
       delay(150);
-      digitalWrite(PIN_ALARM_BUZZER, LOW);
+      buzzerOff();
       delay(100);
     }
   } else if (cmd == "BUZZ_ON" || cmd == "SIREN_ON") {
-    digitalWrite(PIN_ALARM_BUZZER, HIGH);
+    buzzerOn();
     Serial.println("[BUZZER] Buzzer Forced ON");
   } else if (cmd == "BUZZ_OFF" || cmd == "SIREN_OFF") {
-    digitalWrite(PIN_ALARM_BUZZER, LOW);
+    buzzerOff();
     Serial.println("[BUZZER] Buzzer Forced OFF");
   } else if (cmd == "CALIB" || cmd == "ZERO") {
     calibrateMPU();
@@ -202,13 +193,13 @@ void setup() {
 
   // Configure Buzzer Pin
   pinMode(PIN_ALARM_BUZZER, OUTPUT);
-  digitalWrite(PIN_ALARM_BUZZER, LOW);
+  buzzerOff();
 
   // 3 crisp startup confirmation beeps
   for (int i = 0; i < 3; i++) {
-    digitalWrite(PIN_ALARM_BUZZER, HIGH);
+    buzzerOn();
     delay(90);
-    digitalWrite(PIN_ALARM_BUZZER, LOW);
+    buzzerOff();
     delay(60);
   }
 
@@ -229,18 +220,12 @@ void setup() {
     mpuConnected = false;
     Serial.println("\n[WARN] MPU-6050 not responding on I2C (Check GPIO 21/22 & VCC). Auto-reconnect active.");
   }
-
-  lastFilterTime = millis();
 }
 
 void loop() {
   unsigned long now = millis();
-  float dt = (now - lastFilterTime) / 1000.0;
-  if (dt <= 0.0 || dt > 0.5) dt = 0.02;
-  lastFilterTime = now;
 
   float rawAx = 0, rawAy = 0, rawAz = 1.0;
-  float rawGx = 0, rawGy = 0, rawGz = 0;
   float tempC = 27.0;
 
   // Auto-Reconnect if sensor was disconnected
@@ -255,26 +240,20 @@ void loop() {
     }
   }
 
-  // Burst-Read all 14 registers in 1 transaction
+  // Read Accelerometer & Temperature
   if (mpuConnected) {
     Wire.beginTransmission(mpuAddress);
     Wire.write(0x3B); // ACCEL_XOUT_H
     if (Wire.endTransmission(false) == 0) {
-      if (Wire.requestFrom((int)mpuAddress, 14, (int)true) >= 14) {
+      if (Wire.requestFrom((int)mpuAddress, 8, (int)true) >= 8) {
         int16_t ax = (Wire.read() << 8) | Wire.read();
         int16_t ay = (Wire.read() << 8) | Wire.read();
         int16_t az = (Wire.read() << 8) | Wire.read();
         int16_t rawTemp = (Wire.read() << 8) | Wire.read();
-        int16_t gx = (Wire.read() << 8) | Wire.read();
-        int16_t gy = (Wire.read() << 8) | Wire.read();
-        int16_t gz = (Wire.read() << 8) | Wire.read();
 
         rawAx = ax / 16384.0;
         rawAy = ay / 16384.0;
         rawAz = az / 16384.0;
-        rawGx = gx / 131.0; // deg/s
-        rawGy = gy / 131.0; // deg/s
-        rawGz = gz / 131.0; // deg/s
         tempC = (rawTemp / 340.0) + 36.53;
       }
     } else {
@@ -282,25 +261,25 @@ void loop() {
     }
   }
 
-  // 1. Raw Accelerometer Euler Angles
-  float accelPitch = atan2(rawAy, sqrt(rawAx * rawAx + rawAz * rawAz)) * 180.0 / 3.14159265;
-  float accelRoll  = atan2(-rawAx, rawAz) * 180.0 / 3.14159265;
+  // 1. Raw Accelerometer Euler Angles (Pitch & Roll)
+  float rawPitch = atan2(rawAy, sqrt(rawAx * rawAx + rawAz * rawAz)) * 180.0 / 3.14159265;
+  float rawRoll  = atan2(-rawAx, rawAz) * 180.0 / 3.14159265;
 
-  // 2. High-Speed Complementary Filter Fusion (96% Gyro + 4% Accel)
-  // Provides 0-Lag, buttery smooth, instant physical angle tracking!
-  filteredPitch = 0.96 * (filteredPitch + rawGx * dt) + 0.04 * accelPitch;
-  filteredRoll  = 0.96 * (filteredRoll + rawGy * dt) + 0.04 * accelRoll;
+  // 2. Exponential Moving Average Filter (EMA: 80% old + 20% new)
+  // Completely eliminates gyro drift and returns to 0.00 deg instantly when flat!
+  smoothPitch = (smoothPitch * 0.80) + (rawPitch * 0.20);
+  smoothRoll  = (smoothRoll * 0.80)  + (rawRoll * 0.20);
 
-  // Relative Tilt from Calibrated Table Baseline
-  float deltaPitch = filteredPitch - basePitch;
-  float deltaRoll  = filteredRoll - baseRoll;
+  // Relative Delta Tilt Angle against Rest Baseline
+  float deltaPitch = smoothPitch - basePitch;
+  float deltaRoll  = smoothRoll  - baseRoll;
   float tiltDegrees = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll);
-  if (tiltDegrees < 0.06) tiltDegrees = 0.00;
+  if (tiltDegrees < 0.10) tiltDegrees = 0.00; // Crisp rest baseline deadband
 
-  // 3. Dynamic G-Force Vibration (Delta from 1.0g gravity vector)
+  // 3. Dynamic G-Force Vibration (Delta from static 1.0g gravity)
   float totalAccMag = sqrt(rawAx * rawAx + rawAy * rawAy + rawAz * rawAz);
   float dynamicVibG = fabs(totalAccMag - 1.0);
-  if (dynamicVibG < 0.02) dynamicVibG = 0.01 + (random(0, 4) * 0.001);
+  if (dynamicVibG < 0.02) dynamicVibG = 0.01 + (random(0, 4) * 0.001); // Normal quiet noise floor
 
   // 4. Frequency Detection
   if (dynamicVibG > 0.08 && prevVib <= 0.08) {
@@ -318,7 +297,7 @@ void loop() {
   // 5. Derive Crack Dilation from Physical Rock Shear
   float simulatedCrackMm = (tiltDegrees * 0.15) + (dynamicVibG * 2.0);
   if (simulatedCrackMm > 6.0) simulatedCrackMm = 6.0;
-  if (tiltDegrees < 0.1 && dynamicVibG < 0.04) simulatedCrackMm = 0.00;
+  if (tiltDegrees < 0.15 && dynamicVibG < 0.04) simulatedCrackMm = 0.00;
 
   // 6. Mining Safety Logic (Zero False Alarms)
   bool isMiningMachinery = (dynamicVibG <= MINING_MAX_MACHINERY_VIB) && (tiltDegrees < THRESH_TILT_ADVISORY);
@@ -336,22 +315,23 @@ void loop() {
 
   String status = isCritical ? "critical" : (isAdvisory ? "advisory" : "normal");
 
-  // 7. Non-Blocking Audible Buzzer Alarm
+  // 7. Non-Blocking Audible Buzzer Alarm with Guaranteed Shutoff
   if (isCritical) {
     if (now >= nextAllowedBeep) {
       buzzerOn();
-      buzzerBeepUntil = now + 180;
-      nextAllowedBeep = now + 300;
+      buzzerBeepUntil = now + 160;
+      nextAllowedBeep = now + 320;
     }
   } else if (isAdvisory) {
     if (now >= nextAllowedBeep) {
       buzzerOn();
-      buzzerBeepUntil = now + 120;
+      buzzerBeepUntil = now + 100;
       nextAllowedBeep = now + 2000;
     }
   }
 
-  if (now >= buzzerBeepUntil || (!isCritical && !isAdvisory)) {
+  // Guaranteed Instant Buzzer Shutoff when normal or pulse expires
+  if (status == "normal" || now >= buzzerBeepUntil) {
     buzzerOff();
   }
 
