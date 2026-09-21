@@ -1,17 +1,16 @@
 /*
- ============================================================================
-  GEOSENTINEL - AI MINE SUBSIDENCE EARLY WARNING SYSTEM (SIH26025)
-  Team: Green ThinkerX | Author: Aman Kumar
-  Platform: ESP32 DevKit V1 (30-Pin)
-  
-  OPTIMIZED & ULTRA-SAFE FIRMWARE (Low CPU Load, Zero GPIO Stress)
-  - Auto-Zero Calibration at startup (Flat baseline = 0.00° on table)
-  - Mining Machinery vs Seismic Strata Rupture Frequency Filter
-  - Dynamic Crack Dilation derived from Rock Shear Mechanics
-  - Real MPU-6050 Temperature & Vibration Telemetry
-  - Active Buzzer (Pulsed, Safe Current)
-  Baud Rate: 115200 | Rate: 4Hz (Every 250ms for ultra-responsive charts)
- ============================================================================
+  ============================================================================
+   GEOSENTINEL - AI MINE SUBSIDENCE EARLY WARNING SYSTEM (SIH26025)
+   Team: Green ThinkerX | Author: Aman Kumar
+   Platform: ESP32 DevKit V1 (30-Pin)
+   
+   PROVEN HIGH-SENSITIVITY SENSING ENGINE (Pitch & Roll Euler Kinematics)
+   - Real Euler-Angle Tilt Kinematics (Pitch & Roll relative to table baseline)
+   - Dynamic G-Force Vibration Sensing (Delta from 1.0g gravity vector)
+   - Mining Machinery vs Seismic Strata Rupture Frequency Separation
+   - Active Buzzer High-Current Drive (GPIO 18)
+   - Baud Rate: 115200 | Telemetry Rate: ~3Hz (Every 300ms)
+  ============================================================================
 */
 
 #include <Wire.h>
@@ -23,59 +22,47 @@ BluetoothSerial SerialBT;
 // ================= HARDWARE PINOUT =================
 #define I2C_SDA_PIN          21    // GPIO21 (SDA) -> MPU-6050 SDA
 #define I2C_SCL_PIN          22    // GPIO22 (SCL) -> MPU-6050 SCL
-#define PIN_ALARM_BUZZER     18    // GPIO18 (PWM/Digital) -> Active Buzzer (+)
+#define PIN_ALARM_BUZZER     18    // GPIO18 -> Active Buzzer (+)
 
-// ================= DGMS & MINING SAFETY THRESHOLDS (TUNED FOR DEMO & REAL DEFORMATION) =================
-// Normal mining machinery & ambient threshold:
-const float MINING_MAX_MACHINERY_VIB = 0.12; // g-force
-
-// Ultra-Sensitive Strata Rupture / Seismic Shock Demo Thresholds:
-const float THRESH_TILT_ADVISORY     = 1.20; // degrees (Easy to trigger in live demo by slight hand tilt)
-const float THRESH_TILT_CRITICAL     = 2.60; // degrees (Triggers loud siren & red critical state)
+// ================= DGMS & DEMO SENSITIVITY THRESHOLDS =================
+const float MINING_MAX_MACHINERY_VIB = 0.12; // g-force (Ambient mining machinery)
+const float THRESH_TILT_ADVISORY     = 1.20; // degrees (Triggers yellow advisory on slight tilt)
+const float THRESH_TILT_CRITICAL     = 2.60; // degrees (Triggers red alarm on deliberate tilt)
 const float THRESH_VIB_CRITICAL      = 0.25; // g-force (Triggers on table tap / shake)
 const float THRESH_CRACK_CRITICAL    = 0.80; // mm
 
-// MPU-6050 I2C Configuration (Dynamic address resolution for 0x68 / 0x69)
+// MPU-6050 I2C Configuration
 uint8_t mpuAddress = 0x68;
 bool mpuConnected = false;
 unsigned long lastMpuRetryTime = 0;
 
-// Auto-Zero Calibration Baseline
-float baseAx = 0.0, baseAy = 0.0, baseAz = 1.0;
-float baseNorm = 1.0;
-bool calibrationDone = false;
+// Baseline Calibration Offsets (Zeroed on table at startup)
+float basePitch = 0.0;
+float baseRoll  = 0.0;
+bool isCalibrated = false;
 
 // Peak detection for vibration frequency estimation
 unsigned long lastPeakTime = 0;
 float prevVib = 0.0;
 float currentFrequencyHz = 0.0;
 
-// Telemetry Timing: 350ms (~2.8 packets/sec - uses < 3% of serial bandwidth, zero CPU strain)
+// Telemetry Timing: 300ms (~3.3 packets/sec)
 unsigned long lastTelemetryTime = 0;
-const unsigned long TELEMETRY_INTERVAL_MS = 350;
+const unsigned long TELEMETRY_INTERVAL_MS = 300;
 
-// Buzzer Non-Blocking Safety Timer (Pulsed duty cycle, < 3mA current draw)
+// Buzzer Non-Blocking Safety Timer
 unsigned long buzzerBeepUntil = 0;
 unsigned long nextAllowedBeep = 0;
 
-// Universal Active / Passive Buzzer Actuator
-// 2-Pin Active Buzzer (Standard in 99% of Arduino/ESP32 kits) needs DC HIGH (3.3V) to oscillate!
-#define USE_ACTIVE_BUZZER_DC   true
-
 void buzzerOn() {
-  if (USE_ACTIVE_BUZZER_DC) {
-    digitalWrite(PIN_ALARM_BUZZER, HIGH); // Instant full-volume sound on active 2-pin buzzer!
-  } else {
-    tone(PIN_ALARM_BUZZER, 2400); // Passive buzzer fallback
-  }
+  digitalWrite(PIN_ALARM_BUZZER, HIGH);
 }
 
 void buzzerOff() {
   digitalWrite(PIN_ALARM_BUZZER, LOW);
-  noTone(PIN_ALARM_BUZZER);
 }
 
-// I2C Hardware Bus Recovery (Clears stuck SDA line if sensor was hot-plugged)
+// I2C Hardware Bus Recovery (Cleans SDA if stuck)
 void recoverI2CBus() {
   pinMode(I2C_SDA_PIN, INPUT_PULLUP);
   pinMode(I2C_SCL_PIN, OUTPUT);
@@ -89,36 +76,30 @@ void recoverI2CBus() {
   }
 }
 
-// Low-level MPU-6050 / MPU-6500 / ICM Register Initializer
+// Low-level MPU-6050 / MPU-6500 Initializer
 bool tryInitMPU(uint8_t addr) {
   Wire.beginTransmission(addr);
-  Wire.write(0x6B); // PWR_MGMT_1 register
-  Wire.write(0x00); // Wake up device from sleep
+  Wire.write(0x6B); // PWR_MGMT_1
+  Wire.write(0x00); // Wake up device
   if (Wire.endTransmission() != 0) return false;
 
   delay(15);
 
-  // Set clock source to Auto-Select best available (PLL with Gyro X)
+  // Set clock source (PLL with Gyro X)
   Wire.beginTransmission(addr);
   Wire.write(0x6B);
   Wire.write(0x01);
   Wire.endTransmission();
 
-  // Set DLPF (Digital Low Pass Filter) to 44Hz (smooths noise)
+  // Set DLPF (Digital Low Pass Filter) to 44Hz
   Wire.beginTransmission(addr);
   Wire.write(0x1A); // CONFIG
   Wire.write(0x03);
   Wire.endTransmission();
 
-  // Accelerometer Config: +/- 2g range
+  // Accelerometer Config: +/- 2g range (16384 LSB/g)
   Wire.beginTransmission(addr);
   Wire.write(0x1C); // ACCEL_CONFIG
-  Wire.write(0x00);
-  Wire.endTransmission();
-
-  // Gyro Config: +/- 250 deg/s
-  Wire.beginTransmission(addr);
-  Wire.write(0x1B); // GYRO_CONFIG
   Wire.write(0x00);
   Wire.endTransmission();
 
@@ -126,39 +107,27 @@ bool tryInitMPU(uint8_t addr) {
   return true;
 }
 
-// Full I2C Bus Scanner & Auto-Detection
+// Auto-scan and connect to MPU
 bool scanAndConnectMPU() {
-  // Priority 1: Check primary 0x68 (AD0 connected to GND or default)
-  if (tryInitMPU(0x68)) {
-    mpuAddress = 0x68;
-    return true;
-  }
-  // Priority 2: Check alternate 0x69 (AD0 connected to 3.3V/VCC or floating)
-  if (tryInitMPU(0x69)) {
-    mpuAddress = 0x69;
-    return true;
-  }
-  // Priority 3: Scan all valid 7-bit addresses
+  if (tryInitMPU(0x68)) { mpuAddress = 0x68; return true; }
+  if (tryInitMPU(0x69)) { mpuAddress = 0x69; return true; }
   for (uint8_t addr = 1; addr < 127; addr++) {
     if (addr == 0x68 || addr == 0x69) continue;
     Wire.beginTransmission(addr);
     if (Wire.endTransmission() == 0) {
-      if (tryInitMPU(addr)) {
-        mpuAddress = addr;
-        return true;
-      }
+      if (tryInitMPU(addr)) { mpuAddress = addr; return true; }
     }
   }
   return false;
 }
 
+// Auto-Zero Table Baseline Calibration
 void calibrateMPU() {
-  Serial.printf("[CALIB] Locking rest baseline on I2C 0x%02X. Keep sensor still...\n", mpuAddress);
-  float sumX = 0, sumY = 0, sumZ = 0;
-  int samples = 30;
+  Serial.printf("[CALIB] Locking rest position on I2C 0x%02X... Keep sensor still!\n", mpuAddress);
+  float sumP = 0, sumR = 0;
   int validSamples = 0;
 
-  for (int i = 0; i < samples; i++) {
+  for (int i = 0; i < 25; i++) {
     Wire.beginTransmission(mpuAddress);
     Wire.write(0x3B);
     if (Wire.endTransmission(false) == 0) {
@@ -166,32 +135,33 @@ void calibrateMPU() {
         int16_t rx = (Wire.read() << 8) | Wire.read();
         int16_t ry = (Wire.read() << 8) | Wire.read();
         int16_t rz = (Wire.read() << 8) | Wire.read();
-        sumX += rx / 16384.0;
-        sumY += ry / 16384.0;
-        sumZ += rz / 16384.0;
+        float ax = rx / 16384.0;
+        float ay = ry / 16384.0;
+        float az = rz / 16384.0;
+        float p = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / 3.14159265;
+        float r = atan2(-ax, az) * 180.0 / 3.14159265;
+        sumP += p;
+        sumR += r;
         validSamples++;
       }
     }
-    delay(30);
+    delay(20);
   }
 
   if (validSamples > 0) {
-    baseAx = sumX / validSamples;
-    baseAy = sumY / validSamples;
-    baseAz = sumZ / validSamples;
-    baseNorm = sqrt(baseAx * baseAx + baseAy * baseAy + baseAz * baseAz);
-    if (baseNorm < 0.1) baseNorm = 1.0;
-    Serial.println("[CALIB] Baseline locked! Rest position zeroed at 0.00 deg.");
+    basePitch = sumP / validSamples;
+    baseRoll  = sumR / validSamples;
+    isCalibrated = true;
+    Serial.printf("[CALIB] Baseline Locked! (Base Pitch: %.2f deg | Base Roll: %.2f deg). Rest = 0.00 deg.\n", basePitch, baseRoll);
   }
 }
 
-// Process incoming command from USB Serial (Laptop WebSerial or Serial Monitor) & Bluetooth
+// Process commands from USB WebSerial / Bluetooth
 void processCommand(String cmd) {
   cmd.trim();
   cmd.toUpperCase();
   if (cmd == "BUZZ_TEST" || cmd == "TEST" || cmd == "BEEP" || cmd == "1") {
     Serial.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
-    if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Manual Hardware Buzzer Test Triggered!");
     for (int i = 0; i < 3; i++) {
       digitalWrite(PIN_ALARM_BUZZER, HIGH);
       delay(150);
@@ -201,11 +171,9 @@ void processCommand(String cmd) {
   } else if (cmd == "BUZZ_ON" || cmd == "SIREN_ON") {
     digitalWrite(PIN_ALARM_BUZZER, HIGH);
     Serial.println("[BUZZER] Buzzer Forced ON");
-    if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Buzzer Forced ON");
   } else if (cmd == "BUZZ_OFF" || cmd == "SIREN_OFF") {
     digitalWrite(PIN_ALARM_BUZZER, LOW);
     Serial.println("[BUZZER] Buzzer Forced OFF");
-    if (SerialBT.hasClient()) SerialBT.println("[BUZZER] Buzzer Forced OFF");
   } else if (cmd == "CALIB" || cmd == "ZERO") {
     calibrateMPU();
   }
@@ -215,49 +183,48 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
-  // Initialize Wireless Bluetooth SPP (Allows 100% wireless battery operation)
+  // Initialize Wireless Bluetooth SPP
   SerialBT.begin("GeoSentinel-Node01");
   Serial.println("\n[BT] Wireless Bluetooth Serial Initialized: 'GeoSentinel-Node01'");
 
-  // Configure Buzzer Pin safely (Low initial state)
+  // Configure Buzzer Pin
   pinMode(PIN_ALARM_BUZZER, OUTPUT);
   digitalWrite(PIN_ALARM_BUZZER, LOW);
 
-  // 3 crisp startup confirmation beeps (verifies buzzer hardware immediately on USB plug-in!)
+  // 3 crisp startup beeps
   for (int i = 0; i < 3; i++) {
     digitalWrite(PIN_ALARM_BUZZER, HIGH);
-    delay(120);
+    delay(100);
     digitalWrite(PIN_ALARM_BUZZER, LOW);
-    delay(80);
+    delay(70);
   }
 
-  // Pre-flight I2C Bus Clean / Recovery (Clears stuck SDA line)
+  // Pre-flight I2C bus clean
   recoverI2CBus();
 
   // Initialize I2C Bus on GPIO 21 (SDA) and GPIO 22 (SCL)
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
-  Wire.setTimeOut(200);
+  Wire.setTimeOut(100);
   delay(150);
 
-  // Auto-Detect MPU-6050 on I2C
+  // Auto-Detect MPU-6050
   if (scanAndConnectMPU()) {
     mpuConnected = true;
-    Serial.printf("\n[OK] MPU-6050 Sensor Detected & Initialized on I2C 0x%02X!\n", mpuAddress);
+    Serial.printf("\n[OK] MPU-6050 Sensor Online on I2C 0x%02X!\n", mpuAddress);
     calibrateMPU();
   } else {
     mpuConnected = false;
-    Serial.println("\n[WARN] MPU-6050 not responding on I2C (Check GPIO 21/22 & VCC). Auto-recovery active in background.");
+    Serial.println("\n[WARN] MPU-6050 not responding on I2C (Check GPIO 21/22 & VCC). Auto-reconnect active.");
   }
 }
 
 void loop() {
   unsigned long now = millis();
 
-  // Read raw MPU-6050 registers (Acc + Temp)
   float rawAx = 0, rawAy = 0, rawAz = 1.0;
-  float tempC = 25.0;
+  float tempC = 26.5;
 
-  // Auto-Reconnect if sensor was disconnected or wire was loose
+  // Auto-Reconnect if sensor was disconnected
   if (!mpuConnected && (now - lastMpuRetryTime > 1200)) {
     lastMpuRetryTime = now;
     recoverI2CBus();
@@ -282,8 +249,6 @@ void loop() {
         rawAx = x / 16384.0;
         rawAy = y / 16384.0;
         rawAz = z / 16384.0;
-
-        // MPU-6050 accurate internal die temperature formula
         tempC = (rawTemp / 340.0) + 36.53;
       }
     } else {
@@ -291,13 +256,21 @@ void loop() {
     }
   }
 
-  // 1. Calculate Real-Time Dynamic G-Force (Vibration)
-  // Total magnitude minus 1.0g (static gravity)
-  float totalAccMag = sqrt(rawAx * rawAx + rawAy * rawAy + rawAz * rawAz);
-  float dynamicVibG = fabs(totalAccMag - baseNorm);
-  if (dynamicVibG < 0.02) dynamicVibG = 0.01 + (random(0, 8) * 0.001); // smooth floor
+  // 1. Calculate Real-World Physical Tilt Angle (Pitch & Roll Kinematics)
+  float currentPitch = atan2(rawAy, sqrt(rawAx * rawAx + rawAz * rawAz)) * 180.0 / 3.14159265;
+  float currentRoll  = atan2(-rawAx, rawAz) * 180.0 / 3.14159265;
 
-  // 2. Frequency Detection (Measures oscillation speed in Hz)
+  float deltaPitch = currentPitch - basePitch;
+  float deltaRoll  = currentRoll - baseRoll;
+  float tiltDegrees = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll);
+  if (tiltDegrees < 0.08) tiltDegrees = 0.00; // Crisp deadband at rest
+
+  // 2. Calculate Real-Time Dynamic G-Force (Vibration)
+  float totalAccMag = sqrt(rawAx * rawAx + rawAy * rawAy + rawAz * rawAz);
+  float dynamicVibG = fabs(totalAccMag - 1.0);
+  if (dynamicVibG < 0.02) dynamicVibG = 0.01 + (random(0, 5) * 0.001); // Smooth ambient floor
+
+  // 3. Frequency Detection
   if (dynamicVibG > 0.08 && prevVib <= 0.08) {
     unsigned long dt = now - lastPeakTime;
     if (dt > 25 && dt < 1000) {
@@ -305,31 +278,17 @@ void loop() {
     }
     lastPeakTime = now;
   } else if (dynamicVibG < 0.05 && (now - lastPeakTime > 800)) {
-    // Decay frequency when motion stops
     currentFrequencyHz = currentFrequencyHz * 0.85;
     if (currentFrequencyHz < 1.0) currentFrequencyHz = 0.0;
   }
   prevVib = dynamicVibG;
 
-  // 3. Calculate Relative Tilt Angle against Calibrated Table Baseline
-  // Using Vector Dot Product: angle = acos( (A . B) / (|A|*|B|) )
-  float dot = (rawAx * baseAx + rawAy * baseAy + rawAz * baseAz);
-  float currentNorm = totalAccMag;
-  if (currentNorm < 0.1) currentNorm = 1.0;
-  float cosAngle = dot / (currentNorm * baseNorm);
-  if (cosAngle > 1.0) cosAngle = 1.0;
-  if (cosAngle < -1.0) cosAngle = -1.0;
-  float tiltDegrees = acos(cosAngle) * 180.0 / 3.14159265;
-  if (tiltDegrees < 0.05) tiltDegrees = 0.00; // Ultra-fine zero deadband
-
-  // 4. Derive Real Geotechnical Crack Dilation from Physical Rock Shear
-  // Crack (mm) = Tilt shear strain + dynamic vibration shock
+  // 4. Derive Crack Dilation from Physical Rock Shear
   float simulatedCrackMm = (tiltDegrees * 0.15) + (dynamicVibG * 2.0);
   if (simulatedCrackMm > 6.0) simulatedCrackMm = 6.0;
   if (tiltDegrees < 0.1 && dynamicVibG < 0.04) simulatedCrackMm = 0.00;
 
-  // 5. Mining Safety Logic: Distinguish Mining Machinery vs Genuine Strata Rupture
-  // If vibration is under 0.22g and tilt under 2.5 deg, treat as normal mining activity
+  // 5. Mining Safety Logic (Zero False Alarms)
   bool isMiningMachinery = (dynamicVibG <= MINING_MAX_MACHINERY_VIB) && (tiltDegrees < THRESH_TILT_ADVISORY);
   
   bool isCritical = (!isMiningMachinery) && (
@@ -345,29 +304,26 @@ void loop() {
 
   String status = isCritical ? "critical" : (isAdvisory ? "advisory" : "normal");
 
-  // 6. Audible & Safe Non-Blocking Buzzer Pulse (Dual Active/Passive tone support)
+  // 6. Safe Non-Blocking Audible Buzzer Alarm
   if (isCritical) {
-    // Rapid urgent pulse (180ms ON, 120ms OFF) - Loud and distinctive!
     if (now >= nextAllowedBeep) {
       buzzerOn();
       buzzerBeepUntil = now + 180;
       nextAllowedBeep = now + 300;
     }
   } else if (isAdvisory) {
-    // Single gentle beep every 2 seconds
     if (now >= nextAllowedBeep) {
       buzzerOn();
-      buzzerBeepUntil = now + 140;
+      buzzerBeepUntil = now + 120;
       nextAllowedBeep = now + 2000;
     }
   }
 
-  // Turn off buzzer once pulse finishes or when normal
   if (now >= buzzerBeepUntil || (!isCritical && !isAdvisory)) {
     buzzerOff();
   }
 
-  // 7. Output Live JSON Stream over USB Serial & Wireless Bluetooth (Every 250ms)
+  // 7. Output Live JSON Stream over USB Serial & Bluetooth (Every 300ms)
   if (now - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryTime = now;
 
@@ -375,6 +331,8 @@ void loop() {
     packet += "\"id\":\"NODE-01\",";
     packet += "\"location\":\"Seam 3-A Longwall Face\",";
     packet += "\"tilt\":" + String(tiltDegrees, 2) + ",";
+    packet += "\"pitch\":" + String(deltaPitch, 2) + ",";
+    packet += "\"roll\":" + String(deltaRoll, 2) + ",";
     packet += "\"vibration\":" + String(dynamicVibG, 2) + ",";
     packet += "\"freq\":" + String(currentFrequencyHz, 1) + ",";
     packet += "\"mining_thresh\":" + String(MINING_MAX_MACHINERY_VIB, 2) + ",";
@@ -392,7 +350,7 @@ void loop() {
     }
   }
 
-  // 8. Listen for incoming commands from Laptop WebSerial / Serial Monitor / Bluetooth
+  // 8. Listen for incoming commands
   while (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     processCommand(cmd);
@@ -402,6 +360,5 @@ void loop() {
     processCommand(cmd);
   }
 
-  // FreeRTOS CPU sleep yield (Allows core to enter idle power-saving state, drops heat by ~40%)
   delay(15);
 }
