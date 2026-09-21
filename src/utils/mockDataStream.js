@@ -1,14 +1,14 @@
 import { getAssetUrl } from './assetHelper';
 
-// DGMS Statutory Limits and Constants
+// DGMS Statutory Limits and Constants (Tuned for high sensitivity & live demo response)
 export const DGMS_THRESHOLDS = {
-  TILT_ADVISORY: 2.5,       // degrees (Advisory inspection)
-  TILT_CRITICAL: 5.0,       // degrees (Site-wide evacuation)
-  CRACK_ADVISORY: 2.0,      // mm dilation
-  CRACK_CRITICAL: 4.0,      // mm dilation (Shear rupture imminent)
-  CRACK_RATE_CRITICAL: 0.50,// mm/hr dilation rate
-  VIBRATION_ADVISORY: 0.30, // g-force peak acceleration (micro-fracture)
-  VIBRATION_CRITICAL: 0.65, // g-force (dynamic rock burst / roof rupture)
+  TILT_ADVISORY: 1.20,      // degrees (Advisory inspection - responsive to slight hand tilt)
+  TILT_CRITICAL: 2.60,      // degrees (Site-wide evacuation - triggers on hand tilt)
+  CRACK_ADVISORY: 0.80,     // mm dilation
+  CRACK_CRITICAL: 1.80,     // mm dilation (Shear rupture imminent)
+  CRACK_RATE_CRITICAL: 0.25,// mm/hr dilation rate
+  VIBRATION_ADVISORY: 0.15, // g-force peak acceleration (micro-fracture / table tap)
+  VIBRATION_CRITICAL: 0.35, // g-force (dynamic rock burst / roof rupture / hand shake)
   MOISTURE_ADVISORY: 70.0,  // % pore-water saturation
   MOISTURE_CRITICAL: 88.0,  // % (liquefaction & loss of shear strength)
   CH4_ADVISORY: 0.75,       // % vol (Ventilation boost)
