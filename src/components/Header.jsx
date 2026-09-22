@@ -35,8 +35,9 @@ export default function Header({
   dashboardTheme = 'cyber',
   onSelectTheme,
   fontTheme = 'inter',
-  effect3DTheme = 'sensor-sync',
   onOpenCustomizer,
+  serialConnected = false,
+  onConnectSerial,
   onNavigateHome
 }) {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -254,7 +255,23 @@ export default function Header({
             </select>
           </div>
 
-
+          {/* Direct Physical Hardware Sync Button */}
+          {onConnectSerial && (
+            <button
+              onClick={onConnectSerial}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-lg ${
+                serialConnected
+                  ? 'bg-emerald-600 text-white border border-emerald-400 shadow-emerald-950/50'
+                  : 'bg-slate-800 hover:bg-cyan-950 text-cyan-300 border border-cyan-500/50 hover:border-cyan-400'
+              }`}
+              title="Connect physical ESP32 via USB WebSerial"
+            >
+              <Usb className={`w-4 h-4 ${serialConnected ? 'text-emerald-300 animate-pulse' : 'text-cyan-400'}`} />
+              <span className="hidden sm:inline">
+                {serialConnected ? 'HARDWARE LIVE' : 'CONNECT HARDWARE PORT'}
+              </span>
+            </button>
+          )}
 
           {/* Emergency Siren Actuator Button */}
           <button

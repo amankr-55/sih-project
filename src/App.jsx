@@ -82,6 +82,214 @@ export default function App() {
   const [activeMiners, setActiveMiners] = useState(48);
   const [isDgmsModalOpen, setIsDgmsModalOpen] = useState(false);
   const [thresholds, setThresholds] = useState({ ...DGMS_THRESHOLDS });
+  const [serialConnected, setSerialConnected] = useState(false);
+  const [serialToast, setSerialToast] = useState(null);
+
+  useEffect(() => {
+    if (serialToast) {
+      const timer = setTimeout(() => setSerialToast(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [serialToast]);
+
+  const portRef = useRef(null);
+  const readerRef = useRef(null);
+  const keepReadingRef = useRef(false);
+
+  async function handleDisconnectSerial(isUnplugged = false) {
+    keepReadingRef.current = false;
+    try {
+      if (readerRef.current) {
+        await readerRef.current.cancel();
+      }
+    } catch (e) {}
+    try {
+      if (portRef.current) {
+        await portRef.current.close();
+      }
+    } catch (e) {}
+    portRef.current = null;
+    readerRef.current = null;
+    setSerialConnected(false);
+    setIsSimStreamActive(true);
+    setSerialToast({
+      type: 'info',
+      title: isUnplugged ? 'Hardware Unplugged' : 'Hardware Disconnected',
+      message: isUnplugged 
+        ? 'USB cable disconnected. Switched to digital twin baseline.' 
+        : 'Disconnected from hardware gateway.'
+    });
+  }
+
+  // OS Hotplug USB event listeners
+  useEffect(() => {
+    if (!('serial' in navigator)) return;
+
+    const onDisconnect = () => {
+      handleDisconnectSerial(true);
+    };
+
+    navigator.serial.addEventListener('disconnect', onDisconnect);
+    return () => {
+      navigator.serial.removeEventListener('disconnect', onDisconnect);
+    };
+  }, []);
+
+  async function handleConnectSerial() {
+    if (serialConnected) {
+      await handleDisconnectSerial(false);
+      return;
+    }
+
+    if (!('serial' in navigator)) {
+      setSerialToast({
+        type: 'error',
+        title: 'Browser Unsupported',
+        message: 'WebSerial API is supported in Google Chrome, Microsoft Edge, and Opera!'
+      });
+      return;
+    }
+
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      portRef.current = port;
+      keepReadingRef.current = true;
+      setSerialConnected(true);
+      setIsSimStreamActive(false);
+      setSerialToast({
+        type: 'success',
+        title: 'Hardware Connected!',
+        message: 'ESP32 MPU-6050 live telemetry synchronized at 115200 baud.'
+      });
+      logEvent('normal', 'USB', 'ESP32 Hardware Node connected via WebSerial (115200 baud)');
+
+      const decoder = new TextDecoder();
+      let lineBuffer = '';
+
+      while (port.readable && keepReadingRef.current) {
+        const reader = port.readable.getReader();
+        readerRef.current = reader;
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+              lineBuffer += decoder.decode(value, { stream: true });
+              const lines = lineBuffer.split(/\r?\n/);
+              lineBuffer = lines.pop();
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                const startIdx = trimmed.indexOf('{');
+                const endIdx = trimmed.lastIndexOf('}');
+                if (startIdx !== -1 && endIdx > startIdx) {
+                  try {
+                    const jsonStr = trimmed.substring(startIdx, endIdx + 1);
+                    const data = JSON.parse(jsonStr);
+                    handleHardwareTelemetry(data);
+                  } catch (e) {}
+                }
+              }
+            }
+          }
+        } catch (readErr) {
+          console.warn('Serial stream stopped:', readErr);
+          break;
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch (e) {}
+          readerRef.current = null;
+        }
+      }
+
+      if (keepReadingRef.current) {
+        await handleDisconnectSerial(true);
+      }
+    } catch (err) {
+      console.error('Serial port error:', err);
+      await handleDisconnectSerial(false);
+      if (err.name !== 'NotFoundError') {
+        let msg = err.message;
+        if (err.message && (err.message.includes('Failed to open') || err.name === 'NetworkError')) {
+          msg = 'Port is busy! Please CLOSE the Serial Monitor in Arduino IDE (Ctrl+Shift+M), then click Connect again.';
+        }
+        setSerialToast({
+          type: 'error',
+          title: 'Serial Port Notice',
+          message: msg
+        });
+      }
+    }
+  }
+
+  function handleHardwareTelemetry(data) {
+    const NODE_PROPAGATION = {
+      'NODE-01': { tiltMul: 1.00, vibMul: 1.00, crackMul: 1.00, tempOff: 0.0 },
+      'NODE-02': { tiltMul: 0.88, vibMul: 0.85, crackMul: 0.82, tempOff: -0.8 },
+      'NODE-03': { tiltMul: 1.08, vibMul: 0.98, crackMul: 1.04, tempOff: +1.2 },
+      'NODE-04': { tiltMul: 0.78, vibMul: 0.75, crackMul: 0.72, tempOff: -1.4 },
+      'NODE-05': { tiltMul: 0.82, vibMul: 0.80, crackMul: 0.79, tempOff: -0.5 },
+      'NODE-06': { tiltMul: 0.65, vibMul: 0.60, crackMul: 0.58, tempOff: -2.1 },
+    };
+
+    const baseTilt = typeof data.tilt === 'number' ? data.tilt : 0.0;
+    const basePitch = typeof data.pitch === 'number' ? data.pitch : (typeof data.tiltX === 'number' ? data.tiltX : baseTilt);
+    const baseRoll = typeof data.roll === 'number' ? data.roll : (typeof data.tiltY === 'number' ? data.tiltY : +(baseTilt * 0.5).toFixed(2));
+    const baseVib = typeof data.vibration === 'number' ? data.vibration : 0.01;
+    const baseCrack = typeof data.crack === 'number' ? data.crack : 0.0;
+    const rawTemp = typeof data.temp === 'number' ? data.temp : 26.5;
+    const baseTemp = +(rawTemp > 40 ? rawTemp - 19.5 : rawTemp).toFixed(1);
+
+    setNodes(prevNodes => prevNodes.map(n => {
+      const prop = NODE_PROPAGATION[n.id] || { tiltMul: 1.0, vibMul: 1.0, crackMul: 1.0, tempOff: 0 };
+      const nodePitch = +(basePitch * prop.tiltMul).toFixed(2);
+      const nodeRoll = +(baseRoll * prop.tiltMul).toFixed(2);
+      const nodeTilt = +(Math.sqrt(nodePitch * nodePitch + nodeRoll * nodeRoll)).toFixed(2);
+      const nodeVib = +(baseVib * prop.vibMul).toFixed(2);
+      const nodeCrack = +(baseCrack * prop.crackMul).toFixed(2);
+      const nodeTemp = +(baseTemp + prop.tempOff).toFixed(1);
+
+      const nodeStatus = (
+        nodeTilt >= DGMS_THRESHOLDS.TILT_CRITICAL || 
+        nodeCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL || 
+        nodeVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL
+      ) ? 'critical' : (
+        nodeTilt >= DGMS_THRESHOLDS.TILT_ADVISORY || 
+        nodeCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY || 
+        nodeVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY
+      ) ? 'advisory' : 'normal';
+
+      return {
+        ...n,
+        tiltX: nodePitch,
+        tiltY: nodeRoll,
+        vibrationG: nodeVib,
+        crackDisplacement: nodeCrack,
+        temperature: nodeTemp,
+        status: nodeStatus,
+        lastSeen: 'Live Hardware'
+      };
+    }));
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setHistoryData(prev => [
+      ...prev.slice(1),
+      {
+        time: timeStr,
+        tilt: +(baseTilt).toFixed(2),
+        vibration: +(baseVib).toFixed(2),
+        crack: +(baseCrack).toFixed(2),
+        temp: +(baseTemp).toFixed(1),
+        freq: 14.2,
+        ch4: 0.22,
+        co: 6.5
+      }
+    ]);
+  }
 
   const [events, setEvents] = useState([
     {
@@ -123,7 +331,7 @@ export default function App() {
   let maxTemp = 0;
 
   // In hardware mode, evaluate exclusively NODE-01 (the physical device)
-  const activeNodesForStatus = hardwareMode === 'hardware'
+  const activeNodesForStatus = serialConnected
     ? nodes.filter(n => n.id === 'NODE-01')
     : nodes;
 
@@ -405,8 +613,34 @@ export default function App() {
         effect3DTheme={effect3DTheme}
         onSelect3DEffectTheme={setEffect3DTheme}
         onOpenCustomizer={() => setIsThemeCustomizerOpen(true)}
+        serialConnected={serialConnected}
+        onConnectSerial={handleConnectSerial}
         onNavigateHome={() => setActiveTab('overview')}
       />
+
+      {/* Floating Hardware Status Toast */}
+      {serialToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm animate-bounce-in shadow-2xl">
+          <div className={`p-4 rounded-2xl border backdrop-blur-xl flex items-start gap-3 ${
+            serialToast.type === 'success' 
+              ? 'bg-emerald-950/90 border-emerald-500/80 text-emerald-100 shadow-emerald-950/50' 
+              : serialToast.type === 'error'
+              ? 'bg-red-950/90 border-red-500/80 text-red-100 shadow-red-950/50'
+              : 'bg-slate-900/90 border-cyan-500/80 text-cyan-100 shadow-cyan-950/50'
+          }`}>
+            <div className="flex-1">
+              <h4 className="font-bold text-xs uppercase tracking-wider">{serialToast.title}</h4>
+              <p className="text-xs mt-0.5 opacity-90 leading-relaxed">{serialToast.message}</p>
+            </div>
+            <button 
+              onClick={() => setSerialToast(null)} 
+              className="text-xs opacity-60 hover:opacity-100 font-black cursor-pointer px-1"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tri-State Alarm Banner */}
       <div className="relative z-10">
