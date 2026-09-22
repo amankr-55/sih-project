@@ -20,6 +20,10 @@
 #define SDA_PIN       21
 #define SCL_PIN       22
 #define BUZZER_PIN    18
+#define LED_PIN       19
+#define POT_PIN       34   // Linear Potentiometer (Crack gauge 0-5mm)
+#define GAS_PIN       35   // MQ-4 Gas Sensor (Analog A0)
+#define MOISTURE_PIN  33   // Capacitive Soil Moisture Sensor (AOUT)
 
 uint8_t mpuAddr = 0x68;
 bool mpuFound = false;
@@ -27,7 +31,7 @@ bool mpuFound = false;
 // Exponential Moving Average (EMA) for butter-smooth noise reduction
 float filtAx = 0.0, filtAy = 0.0, filtAz = 1.0;
 
-// Non-blocking buzzer timer
+// Non-blocking buzzer & LED timer
 unsigned long lastBuzzerToggle = 0;
 bool buzzerBeepState = false;
 
@@ -37,9 +41,10 @@ unsigned long lastI2CRetry = 0;
 
 // Reset & Clear I2C Bus
 void resetI2C() {
+  Wire.end();
   pinMode(SDA_PIN, INPUT_PULLUP);
   pinMode(SCL_PIN, OUTPUT);
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 16; i++) {
     digitalWrite(SCL_PIN, LOW);
     delayMicroseconds(5);
     digitalWrite(SCL_PIN, HIGH);
@@ -81,7 +86,8 @@ bool initMPU(uint8_t addr) {
 bool connectMPU() {
   resetI2C();
   Wire.begin(SDA_PIN, SCL_PIN, 100000);
-  delay(50);
+  Wire.setTimeOut(40); // 40ms timeout prevents any I2C hang on cable hot-plug
+  delay(30);
 
   if (initMPU(0x68)) return true;
   if (initMPU(0x69)) return true;
@@ -103,12 +109,21 @@ void setup() {
 
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
+  
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
-  // 2 Startup Confirmation Beeps
+  pinMode(POT_PIN, INPUT);
+  pinMode(GAS_PIN, INPUT);
+  pinMode(MOISTURE_PIN, INPUT);
+
+  // Startup Confirmation Beeps & LED flash
+  digitalWrite(LED_PIN, HIGH);
   digitalWrite(BUZZER_PIN, HIGH); delay(80);
   digitalWrite(BUZZER_PIN, LOW);  delay(60);
   digitalWrite(BUZZER_PIN, HIGH); delay(80);
   digitalWrite(BUZZER_PIN, LOW);
+  digitalWrite(LED_PIN, LOW);
 
   // Connect MPU
   mpuFound = connectMPU();
@@ -167,7 +182,7 @@ void loop() {
   filtAz = (filtAz * 0.80) + (rawAz * 0.20);
 
   // 1. Calculate True Physical Tilt from Gravity Vector
-  // When sitting flat on table: filtAx ~ 0, filtAy ~ 0, filtAz ~ 1.0 -> Pitch ~ 0°, Roll ~ 0°, Tilt ~ 0.00°!
+  // Sitting flat on table: Pitch ~ 0°, Roll ~ 0°, Tilt ~ 0.00°
   float pitch = atan2(filtAy, sqrt(filtAx * filtAx + filtAz * filtAz)) * 180.0 / 3.14159;
   float roll  = atan2(-filtAx, filtAz) * 180.0 / 3.14159;
   float tilt  = sqrt(pitch * pitch + roll * roll);
@@ -178,32 +193,68 @@ void loop() {
   float vibration = fabs(totalG - 1.0);
   if (vibration < 0.02) vibration = 0.01;
 
+// Set to true only if you have physical Potentiometer/MQ-4/Moisture wired to GPIO 34/35/33
+#define ENABLE_ANALOG_SENSORS false
+
   // 3. Physical Crack Dilation (mm)
-  float crack = (tilt * 0.15) + (vibration * 1.8);
+  float crack = 0.0;
+#if ENABLE_ANALOG_SENSORS
+  int potRaw = analogRead(POT_PIN);
+  if (potRaw > 100) {
+    crack = (potRaw / 4095.0) * 5.0; // 0 to 5.0 mm range
+  } else {
+    crack = (tilt * 0.15) + (vibration * 1.8);
+  }
+#else
+  // Geotechnical crack dilation derived directly from strata tilt & micro-vibration
+  crack = (tilt * 0.15) + (vibration * 1.8);
+#endif
   if (crack > 5.0) crack = 5.0;
   if (tilt < 0.15 && vibration < 0.03) crack = 0.00;
 
-  // 4. Alert Status
+  float ch4 = 0.22;
+  float moisture = 38.0;
+
+#if ENABLE_ANALOG_SENSORS
+  int gasRaw = analogRead(GAS_PIN);
+  if (gasRaw > 200) {
+    ch4 = (gasRaw / 4095.0) * 2.50; // 0 to 2.5% vol CH4
+  }
+
+  int moistRaw = analogRead(MOISTURE_PIN);
+  if (moistRaw > 200) {
+    moisture = 100.0 - ((moistRaw / 4095.0) * 100.0);
+    if (moisture < 0) moisture = 0.0;
+  }
+#endif
+
+  // 4. DGMS Safety Evaluation & Alert Status
   String status = "normal";
-  if (tilt >= 2.60 || vibration >= 0.28 || crack >= 1.20) {
+  if (tilt >= 2.60 || vibration >= 0.28 || crack >= 1.20 || ch4 >= 1.25 || moisture >= 85.0) {
     status = "critical";
-  } else if (tilt >= 1.20 || vibration >= 0.14 || crack >= 0.60) {
+  } else if (tilt >= 1.20 || vibration >= 0.14 || crack >= 0.60 || ch4 >= 0.75 || moisture >= 65.0) {
     status = "advisory";
   }
 
-  // 5. Buzzer Control (Beeps ONLY during Critical, OFF when Normal)
+  // 5. Buzzer & LED Actuators
   if (status == "critical") {
+    digitalWrite(LED_PIN, HIGH);
     if (now - lastBuzzerToggle >= 150) {
       lastBuzzerToggle = now;
       buzzerBeepState = !buzzerBeepState;
       digitalWrite(BUZZER_PIN, buzzerBeepState ? HIGH : LOW);
     }
+  } else if (status == "advisory") {
+    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(BUZZER_PIN, LOW);
+    buzzerBeepState = false;
   } else {
-    digitalWrite(BUZZER_PIN, LOW); // Guaranteed 100% OFF
+    digitalWrite(LED_PIN, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
     buzzerBeepState = false;
   }
 
-  // 6. Stream Live JSON Packet every 200ms
+  // 6. Stream Live JSON Packet every 200ms (5 Hz)
   if (now - lastSendTime >= 200) {
     lastSendTime = now;
 
@@ -216,6 +267,8 @@ void loop() {
     packet += "\"vibration\":" + String(vibration, 2) + ",";
     packet += "\"crack\":" + String(crack, 2) + ",";
     packet += "\"temp\":" + String(tempC, 1) + ",";
+    packet += "\"ch4\":" + String(ch4, 2) + ",";
+    packet += "\"moisture\":" + String(moisture, 1) + ",";
     packet += "\"status\":\"" + status + "\",";
     packet += "\"timestamp\":" + String(now / 1000);
     packet += "}";
@@ -223,14 +276,18 @@ void loop() {
     Serial.println(packet);
   }
 
-  // Manual Command Handler
+  // 7. Remote Command Handler from Browser
   if (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
     cmd.toUpperCase();
-    if (cmd == "TEST" || cmd == "BEEP") {
-      digitalWrite(BUZZER_PIN, HIGH); delay(150);
+    if (cmd == "TEST" || cmd == "BEEP" || cmd == "SIREN_ON") {
+      digitalWrite(LED_PIN, HIGH);
+      digitalWrite(BUZZER_PIN, HIGH); delay(200);
+      digitalWrite(BUZZER_PIN, LOW); delay(100);
+      digitalWrite(BUZZER_PIN, HIGH); delay(200);
       digitalWrite(BUZZER_PIN, LOW);
+      digitalWrite(LED_PIN, LOW);
     }
   }
 

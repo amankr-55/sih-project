@@ -584,7 +584,7 @@ export default function TelemetryPanels({
             <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">HARDWARE SOURCE</span>
               <span className="text-xs font-bold text-cyan-400 font-mono mt-2 block">
-                NODE-01 (ESP32 Live)
+                NODE-01 (Active Longwall Panel)
               </span>
             </div>
           </div>

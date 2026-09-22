@@ -114,7 +114,7 @@ export default function App() {
     }
   }
 
-  async function handleDisconnectSerial() {
+  async function handleDisconnectSerial(isUnplugged = false) {
     keepReadingRef.current = false;
     try {
       if (readerRef.current) {
@@ -137,16 +137,46 @@ export default function App() {
     setIsSimStreamActive(true);
     setSerialToast({
       type: 'info',
-      title: 'ESP32 Disconnected',
-      message: 'Switched back to simulation demo stream.'
+      title: isUnplugged ? 'Hardware Unplugged' : 'Hardware Disconnected',
+      message: isUnplugged 
+        ? 'USB cable disconnected. Switched to simulation stream. Plug back in to reconnect.'
+        : 'Disconnected from hardware gateway.'
     });
-    setSerialLogs(prev => [...prev.slice(-25), '[INFO] Disconnected from ESP32.']);
+    setSerialLogs(prev => [...prev.slice(-25), isUnplugged ? '[WARN] USB Cable unplugged.' : '[INFO] Disconnected from hardware.']);
   }
 
-  // WebSerial API handler for live physical ESP32 streaming
-  async function handleConnectSerial() {
+  // Auto-listen for USB Connect & Disconnect OS events
+  useEffect(() => {
+    if (!('serial' in navigator)) return;
+
+    const onDisconnect = (event) => {
+      console.warn('WebSerial disconnect event detected:', event);
+      handleDisconnectSerial(true);
+    };
+
+    const onConnect = async (event) => {
+      console.log('WebSerial device connected:', event);
+      setSerialToast({
+        type: 'info',
+        title: 'Hardware Detected',
+        message: 'USB Hardware plugged in! Click "CONNECT HARDWARE PORT" to resume live sync.'
+      });
+      setSerialLogs(prev => [...prev.slice(-25), '[INFO] USB Hardware plugged in! Ready to connect.']);
+    };
+
+    navigator.serial.addEventListener('disconnect', onDisconnect);
+    navigator.serial.addEventListener('connect', onConnect);
+
+    return () => {
+      navigator.serial.removeEventListener('disconnect', onDisconnect);
+      navigator.serial.removeEventListener('connect', onConnect);
+    };
+  }, []);
+
+  // WebSerial API handler for live physical hardware streaming
+  async function handleConnectSerial(targetPort = null) {
     if (serialConnected) {
-      await handleDisconnectSerial();
+      await handleDisconnectSerial(false);
       return;
     }
 
@@ -159,8 +189,32 @@ export default function App() {
       return;
     }
 
+    // Clean up any stale handles before opening
     try {
-      const port = await navigator.serial.requestPort();
+      if (readerRef.current) {
+        await readerRef.current.cancel();
+      }
+    } catch (e) {}
+    try {
+      if (portRef.current) {
+        await portRef.current.close();
+      }
+    } catch (e) {}
+    portRef.current = null;
+    readerRef.current = null;
+
+    try {
+      let port = targetPort;
+      if (!port) {
+        try {
+          port = await navigator.serial.requestPort();
+        } catch (reqErr) {
+          // User cancelled port selection dialog
+          console.log('Port selection prompt closed by user:', reqErr);
+          return;
+        }
+      }
+
       await port.open({ baudRate: 115200 });
       portRef.current = port;
       keepReadingRef.current = true;
@@ -169,15 +223,15 @@ export default function App() {
       setIsSimStreamActive(false);
       setSerialToast({
         type: 'success',
-        title: 'ESP32 Connected!',
-        message: 'Live hardware sensor data streaming at 115200 baud.'
+        title: 'Hardware Connected!',
+        message: 'ESP32 Live hardware telemetry synchronized at 115200 baud.'
       });
       setSerialLogs(prev => [
         ...prev.slice(-25),
-        `[SUCCESS] Connected to USB Serial Port at 115200 baud!`,
-        `[HARDWARE] Subterranean Node live streaming active.`
+        `[SUCCESS] Connected to USB COM Port at 115200 baud!`,
+        `[HARDWARE] Subterranean Strata telemetry live streaming.`
       ]);
-      logEvent('normal', 'USB', 'ESP32 Subterranean Node connected via WebSerial (COM Port 115200 baud)');
+      logEvent('normal', 'USB', 'Subterranean Gateway synchronized via WebSerial (115200 baud)');
 
       const decoder = new TextDecoder();
       let lineBuffer = '';
@@ -216,27 +270,28 @@ export default function App() {
           }
         } catch (readErr) {
           if (keepReadingRef.current) {
-            console.error('Serial stream read error:', readErr);
+            console.warn('Serial stream read stopped/unplugged:', readErr);
           }
+          break;
         } finally {
           try {
             reader.releaseLock();
-          } catch (e) {
-            // ignore lock release error
-          }
+          } catch (e) {}
           readerRef.current = null;
         }
       }
+
+      // If loop exited while we were reading, clean up
+      if (keepReadingRef.current) {
+        await handleDisconnectSerial(true);
+      }
     } catch (err) {
       console.error('Serial port error:', err);
-      setSerialConnected(false);
-      setHardwareMode('simulation');
-      setSerialLogs(prev => [...prev.slice(-25), `[ERROR] Serial Port: ${err.message}`]);
-      logEvent('advisory', 'USB', `WebSerial connection: ${err.message}`);
+      await handleDisconnectSerial(false);
 
       let userTip = err.message;
       if (err.message && (err.message.includes('Failed to open') || err.name === 'NetworkError')) {
-        userTip = 'COM Port is busy! Please CLOSE the Serial Monitor in Arduino IDE (Ctrl+Shift+M), then click Connect again.';
+        userTip = 'Port is busy or reconnecting. If Arduino IDE Serial Monitor is open, please close it (Ctrl+Shift+M), then click Connect again.';
       } else if (err.name === 'NotFoundError' || err.message?.includes('No port selected')) {
         userTip = 'No port was selected by user.';
       }
@@ -263,15 +318,21 @@ export default function App() {
     };
 
     const baseTilt = typeof data.tilt === 'number' ? data.tilt : 0.0;
+    const basePitch = typeof data.pitch === 'number' ? data.pitch : (typeof data.tiltX === 'number' ? data.tiltX : baseTilt);
+    const baseRoll = typeof data.roll === 'number' ? data.roll : (typeof data.tiltY === 'number' ? data.tiltY : +(baseTilt * 0.5).toFixed(2));
     const baseVib = typeof data.vibration === 'number' ? data.vibration : 0.01;
     const baseCrack = typeof data.crack === 'number' ? data.crack : 0.0;
-    // MPU-6050 internal die runs ~19°C hotter than ambient room temperature
     const rawTemp = typeof data.temp === 'number' ? data.temp : 28.5;
     const baseTemp = +(rawTemp > 40 ? rawTemp - 19.5 : rawTemp).toFixed(1);
+    const baseMoisture = typeof data.moisture === 'number' ? data.moisture : null;
+    const baseCH4 = typeof data.ch4 === 'number' ? data.ch4 : null;
+    const baseCO = typeof data.co === 'number' ? data.co : null;
 
     setNodes(prevNodes => prevNodes.map(n => {
       const prop = NODE_PROPAGATION[n.id] || { tiltMul: 1.0, vibMul: 1.0, crackMul: 1.0, tempOff: 0 };
-      const nodeTilt = +(baseTilt * prop.tiltMul).toFixed(2);
+      const nodePitch = +(basePitch * prop.tiltMul).toFixed(2);
+      const nodeRoll = +(baseRoll * prop.tiltMul).toFixed(2);
+      const nodeTilt = +(Math.sqrt(nodePitch * nodePitch + nodeRoll * nodeRoll)).toFixed(2);
       const nodeVib = +(baseVib * prop.vibMul).toFixed(2);
       const nodeCrack = +(baseCrack * prop.crackMul).toFixed(2);
       const nodeTemp = +(baseTemp + prop.tempOff).toFixed(1);
@@ -288,11 +349,14 @@ export default function App() {
 
       return {
         ...n,
-        tiltX: nodeTilt,
-        tiltY: +(nodeTilt * 0.5).toFixed(2),
+        tiltX: nodePitch,
+        tiltY: nodeRoll,
         vibrationG: nodeVib,
         crackDisplacement: nodeCrack,
         temperature: nodeTemp,
+        ...(baseMoisture !== null ? { moisture: +(baseMoisture).toFixed(1) } : {}),
+        ...(baseCH4 !== null ? { ch4: +(baseCH4).toFixed(2) } : {}),
+        ...(baseCO !== null ? { co: +(baseCO).toFixed(1) } : {}),
         status: nodeStatus,
         lastSeen: 'Live Hardware'
       };
@@ -768,7 +832,7 @@ export default function App() {
                     onClick={handleConnectSerial}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-mono text-xs font-black flex items-center gap-2 shadow-lg transition-all cursor-pointer"
                   >
-                    <span>CONNECT PHYSICAL ESP32</span>
+                    <span>CONNECT HARDWARE GATEWAY</span>
                   </button>
                 )}
               </div>

@@ -265,11 +265,11 @@ export default function Header({
                   ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500 shadow-emerald-950/50'
                   : 'bg-slate-800 hover:bg-cyan-950/60 text-cyan-300 border border-cyan-500/50 hover:border-cyan-400'
               }`}
-              title="Connect physical ESP32 on COM6 via USB WebSerial"
+              title="Connect physical hardware gateway via USB WebSerial"
             >
               <Usb className={`w-4 h-4 ${serialConnected ? 'text-emerald-400 animate-pulse' : 'text-cyan-400'}`} />
               <span className="hidden sm:inline">
-                {serialConnected ? 'ESP32 HARDWARE LIVE' : 'CONNECT ESP32 (COM6)'}
+                {serialConnected ? 'HARDWARE TELEMETRY LIVE' : 'CONNECT HARDWARE PORT'}
               </span>
             </button>
           )}

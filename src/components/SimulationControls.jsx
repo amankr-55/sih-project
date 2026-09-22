@@ -63,7 +63,7 @@ export default function SimulationControls({
             }`}
           >
             <Usb className={`w-3.5 h-3.5 ${serialConnected ? 'text-emerald-400 animate-pulse' : 'text-cyan-400'}`} />
-            <span>{serialConnected ? 'ESP32 Live (COM6)' : 'Connect ESP32 (COM6)'}</span>
+            <span>{serialConnected ? 'Hardware Live' : 'Connect Hardware Port'}</span>
           </button>
         </div>
       </div>
