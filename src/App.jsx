@@ -346,6 +346,8 @@ export default function App() {
     if ((n.temperature || 28) > maxTemp) maxTemp = n.temperature || 28;
   });
 
+  const hardwareMode = serialConnected ? 'hardware' : 'simulation';
+
   const overallStatus = 
     maxTilt >= DGMS_THRESHOLDS.TILT_CRITICAL || 
     maxCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL || 
