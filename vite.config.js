@@ -3,15 +3,14 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: './',
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? './' : '/',
   plugins: [
     react(),
     tailwindcss()
   ],
   server: {
     host: true,
-    port: 5173,
-    open: true
+    port: 5173
   }
-})
+}))
