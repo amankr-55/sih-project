@@ -1,40 +1,24 @@
 import React, { useState } from 'react';
 import { 
   Settings, 
-  Usb, 
   Radio, 
   Sliders, 
   Cpu, 
-  Code2, 
   CheckCircle2, 
   AlertCircle, 
   Save, 
-  Terminal,
-  Layers,
+  Layers, 
   Key
 } from 'lucide-react';
 import { DGMS_THRESHOLDS } from '../utils/mockDataStream';
 
 export default function SettingsSection({ 
-  serialConnected = false, 
-  onConnectSerial, 
-  serialLogs = [], 
   thresholds: propThresholds, 
   onUpdateThresholds 
 }) {
-  const [activeTab, setActiveTab] = useState('hardware'); // 'hardware', 'thresholds', 'lora', 'code'
-  const [baudRate, setBaudRate] = useState('115200');
-
-  // Local threshold states
+  const [activeTab, setActiveTab] = useState('thresholds'); // thresholds, lora
   const [thresholds, setThresholds] = useState(propThresholds || { ...DGMS_THRESHOLDS });
   const [savedSuccess, setSavedSuccess] = useState(false);
-
-  // Web Serial API caller delegates to the centralized app connection
-  function handleConnect() {
-    if (onConnectSerial) {
-      onConnectSerial();
-    }
-  }
 
   function handleSaveThresholds() {
     if (onUpdateThresholds) onUpdateThresholds(thresholds);
@@ -53,28 +37,19 @@ export default function SettingsSection({
           </div>
           <div>
             <h2 className="text-lg font-black text-white tracking-wider flex items-center gap-2">
-              SYSTEM CONFIGURATION & HARDWARE-SOFTWARE INTEGRATION
+              SYSTEM CONFIGURATION & DGMS SAFETY CONTROLS
               <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono">
-                ENGINEERING CONSOLE
+                SAFETY CONSOLE
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Live USB COM Port Web Serial connection, LoRa RF mesh configurations, and DGMS threshold parameters
+              DGMS statutory limit configurations, subterranean LoRa mesh network topology, and sensor calibration
             </p>
           </div>
         </div>
 
         {/* Navigation sub-tabs */}
         <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-          <button
-            onClick={() => setActiveTab('hardware')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              activeTab === 'hardware' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Usb className="w-3.5 h-3.5" />
-            <span>Hardware Bridge</span>
-          </button>
           <button
             onClick={() => setActiveTab('thresholds')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
@@ -91,94 +66,12 @@ export default function SettingsSection({
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>LoRa Radio</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('code')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              activeTab === 'code' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>Arduino Code</span>
+            <span>LoRa Mesh Network</span>
           </button>
         </div>
       </div>
 
-      {/* Tab 1: Hardware Web Serial Bridge */}
-      {activeTab === 'hardware' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          
-          <div className="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Usb className="w-4 h-4 text-cyan-400" />
-              Direct USB Web Serial Connection (Browser to ESP32)
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Connect your physical ESP32 LoRa Gateway directly to your laptop via USB. GeoSentinel reads serial COM telemetry directly in the browser with sub-second latency without needing external drivers.
-            </p>
 
-            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300 font-bold">Serial Baud Rate:</span>
-                <select
-                  value={baudRate}
-                  onChange={(e) => setBaudRate(e.target.value)}
-                  className="bg-slate-900 text-cyan-400 font-mono font-bold border border-slate-700 px-3 py-1 rounded-lg outline-none cursor-pointer"
-                >
-                  <option value="9600">9600 baud</option>
-                  <option value="57600">57600 baud</option>
-                  <option value="115200">115200 baud (Recommended)</option>
-                  <option value="230400">230400 baud</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300 font-bold">Port Status:</span>
-                <span className={`font-mono font-bold px-2 py-0.5 rounded ${
-                  serialConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'
-                }`}>
-                  {serialConnected ? 'CONNECTED (ONLINE)' : 'DISCONNECTED'}
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleConnect}
-              className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                serialConnected 
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-500' 
-                  : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/30'
-              }`}
-            >
-              <Usb className="w-4 h-4" />
-              <span>{serialConnected ? 'Port Active (Click to Re-select)' : 'Connect ESP32 via USB Serial'}</span>
-            </button>
-
-            <div className="text-[11px] text-slate-400 border-t border-slate-800 pt-3">
-              📌 <strong>Step:</strong> Plug the ESP32 into any USB port. Click the button above, choose <strong>"Silicon Labs CP210x / CH340 / USB Serial"</strong> in the browser popup, and your hardware is live!
-            </div>
-          </div>
-
-          {/* Serial Terminal Output */}
-          <div className="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2 font-mono">
-                <Terminal className="w-4 h-4 text-cyan-400" />
-                SERIAL PACKET RECEIVER TERMINAL
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono">Buffer: UTF-8 JSON</span>
-            </div>
-
-            <div className="flex-1 bg-black rounded-xl border border-slate-800 p-3 font-mono text-[11px] text-emerald-400 overflow-y-auto max-h-64 space-y-1">
-              {serialLogs.map((log, idx) => (
-                <div key={idx} className="leading-tight">{log}</div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      )}
 
       {/* Tab 2: DGMS Statutory Thresholds */}
       {activeTab === 'thresholds' && (
@@ -358,81 +251,8 @@ export default function SettingsSection({
               <span className="text-[9px] text-slate-500 block">Coding Rate: 4/5</span>
             </div>
           </div>
-
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
-            <span className="text-slate-300 font-bold block mb-1">AES-128 Encryption & Anti-Tamper:</span>
-            <p className="text-[11px] text-slate-400">
-              Every packet transmitted from subterranean nodes is encrypted with a hardware key to prevent spoofing or unauthorized tampering with mine safety records.
-            </p>
-          </div>
         </div>
       )}
-
-      {/* Tab 4: Ready-to-Flash Arduino Code */}
-      {activeTab === 'code' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Code2 className="w-4 h-4 text-cyan-400" />
-              ESP32 Firmware Code (Ready to Flash via Arduino IDE)
-            </h3>
-            <span className="text-xs text-slate-400 font-mono">Baud: 115200</span>
-          </div>
-
-          <pre className="bg-black text-emerald-400 p-4 rounded-xl border border-slate-800 text-xs font-mono overflow-x-auto max-h-96">
-{`#include <Wire.h>
-#include <SPI.h>
-#include <LoRa.h>
-
-// PIN CONFIGURATION FOR ESP32 NODE
-#define PIN_POT_CRACK 34   // Analog Input for Linear Potentiometer
-#define PIN_MQ_GAS    35   // Analog Input for Gas Sensor
-#define PIN_SOIL      32   // Capacitive Moisture Probe
-#define LORA_SS       5
-#define LORA_RST      14
-#define LORA_DIO0     2
-
-const char* NODE_ID = "NODE-01";
-
-void setup() {
-  Serial.begin(115200);
-  Wire.begin(21, 22); // I2C SDA, SCL for MPU6050
-  
-  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
-  if (!LoRa.begin(868E6)) {
-    Serial.println("{\"error\": \"LoRa init failed\"}");
-  }
-}
-
-void loop() {
-  // Read Potentiometer Crack Gauge (0-3.3V mapped to 0-5.0mm)
-  int potRaw = analogRead(PIN_POT_CRACK);
-  float crackMM = (potRaw / 4095.0) * 5.0;
-
-  // Read MPU6050 Tilt Angle (Sample simulated I2C)
-  float tiltAngle = 0.8 + (analogRead(PIN_MQ_GAS) % 50) * 0.02;
-
-  // Read Gas (Mapped to 0-2% CH4)
-  float ch4 = (analogRead(PIN_MQ_GAS) / 4095.0) * 2.0;
-
-  // Output JSON formatted packet to USB Serial & LoRa
-  String packet = "{\\"node\\":\\"" + String(NODE_ID) + 
-                  "\\",\\"tilt\\":" + String(tiltAngle, 2) + 
-                  ",\\"crack\\":" + String(crackMM, 2) + 
-                  ",\\"ch4\\":" + String(ch4, 2) + "}";
-
-  Serial.println(packet);     // Pushed directly to GeoSentinel Dashboard!
-  
-  LoRa.beginPacket();
-  LoRa.print(packet);
-  LoRa.endPacket();
-
-  delay(1000); // 1-second transmission cycle
-}`}
-          </pre>
-        </div>
-      )}
-
     </div>
   );
 }

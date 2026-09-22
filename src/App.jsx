@@ -80,312 +80,8 @@ export default function App() {
   const [isSirenActive, setIsSirenActive] = useState(false);
   const [currentShift, setCurrentShift] = useState('Shift-A');
   const [activeMiners, setActiveMiners] = useState(48);
-  const [hardwareMode, setHardwareMode] = useState('simulation');
   const [isDgmsModalOpen, setIsDgmsModalOpen] = useState(false);
-  const [serialConnected, setSerialConnected] = useState(false);
-  const [serialToast, setSerialToast] = useState(null);
-  const [serialLogs, setSerialLogs] = useState([
-    '[INIT] Web Serial Controller ready.',
-    '[READY] Plug ESP32 via USB (COM Port) or pair via Bluetooth SPP. Click Connect.'
-  ]);
   const [thresholds, setThresholds] = useState({ ...DGMS_THRESHOLDS });
-
-  useEffect(() => {
-    if (serialToast) {
-      const timer = setTimeout(() => setSerialToast(null), 7000);
-      return () => clearTimeout(timer);
-    }
-  }, [serialToast]);
-
-  const portRef = useRef(null);
-  const readerRef = useRef(null);
-  const keepReadingRef = useRef(false);
-
-  async function sendSerialCommand(cmd) {
-    if (portRef.current && portRef.current.writable) {
-      try {
-        const writer = portRef.current.writable.getWriter();
-        const encoder = new TextEncoder();
-        await writer.write(encoder.encode(`${cmd}\n`));
-        writer.releaseLock();
-      } catch (e) {
-        console.warn('WebSerial send error:', e);
-      }
-    }
-  }
-
-  async function handleDisconnectSerial(isUnplugged = false) {
-    keepReadingRef.current = false;
-    try {
-      if (readerRef.current) {
-        await readerRef.current.cancel();
-      }
-    } catch (e) {
-      // ignore cancel error
-    }
-    try {
-      if (portRef.current) {
-        await portRef.current.close();
-      }
-    } catch (e) {
-      // ignore close error
-    }
-    portRef.current = null;
-    readerRef.current = null;
-    setSerialConnected(false);
-    setHardwareMode('simulation');
-    setIsSimStreamActive(true);
-    setSerialToast({
-      type: 'info',
-      title: isUnplugged ? 'Hardware Unplugged' : 'Hardware Disconnected',
-      message: isUnplugged 
-        ? 'USB cable disconnected. Switched to simulation stream. Plug back in to reconnect.'
-        : 'Disconnected from hardware gateway.'
-    });
-    setSerialLogs(prev => [...prev.slice(-25), isUnplugged ? '[WARN] USB Cable unplugged.' : '[INFO] Disconnected from hardware.']);
-  }
-
-  // Auto-listen for USB Connect & Disconnect OS events
-  useEffect(() => {
-    if (!('serial' in navigator)) return;
-
-    const onDisconnect = (event) => {
-      console.warn('WebSerial disconnect event detected:', event);
-      handleDisconnectSerial(true);
-    };
-
-    const onConnect = async (event) => {
-      console.log('WebSerial device connected:', event);
-      setSerialToast({
-        type: 'info',
-        title: 'Hardware Detected',
-        message: 'USB Hardware plugged in! Click "CONNECT HARDWARE PORT" to resume live sync.'
-      });
-      setSerialLogs(prev => [...prev.slice(-25), '[INFO] USB Hardware plugged in! Ready to connect.']);
-    };
-
-    navigator.serial.addEventListener('disconnect', onDisconnect);
-    navigator.serial.addEventListener('connect', onConnect);
-
-    return () => {
-      navigator.serial.removeEventListener('disconnect', onDisconnect);
-      navigator.serial.removeEventListener('connect', onConnect);
-    };
-  }, []);
-
-  // WebSerial API handler for live physical hardware streaming
-  async function handleConnectSerial(targetPort = null) {
-    if (serialConnected) {
-      await handleDisconnectSerial(false);
-      return;
-    }
-
-    if (!('serial' in navigator)) {
-      setSerialToast({
-        type: 'error',
-        title: 'Browser Unsupported',
-        message: 'WebSerial is natively supported in Google Chrome, Microsoft Edge, and Opera!'
-      });
-      return;
-    }
-
-    // Clean up any stale handles before opening
-    try {
-      if (readerRef.current) {
-        await readerRef.current.cancel();
-      }
-    } catch (e) {}
-    try {
-      if (portRef.current) {
-        await portRef.current.close();
-      }
-    } catch (e) {}
-    portRef.current = null;
-    readerRef.current = null;
-
-    try {
-      let port = targetPort;
-      if (!port) {
-        try {
-          port = await navigator.serial.requestPort();
-        } catch (reqErr) {
-          // User cancelled port selection dialog
-          console.log('Port selection prompt closed by user:', reqErr);
-          return;
-        }
-      }
-
-      await port.open({ baudRate: 115200 });
-      portRef.current = port;
-      keepReadingRef.current = true;
-      setSerialConnected(true);
-      setHardwareMode('hardware');
-      setIsSimStreamActive(false);
-      setSerialToast({
-        type: 'success',
-        title: 'Hardware Connected!',
-        message: 'ESP32 Live hardware telemetry synchronized at 115200 baud.'
-      });
-      setSerialLogs(prev => [
-        ...prev.slice(-25),
-        `[SUCCESS] Connected to USB COM Port at 115200 baud!`,
-        `[HARDWARE] Subterranean Strata telemetry live streaming.`
-      ]);
-      logEvent('normal', 'USB', 'Subterranean Gateway synchronized via WebSerial (115200 baud)');
-
-      const decoder = new TextDecoder();
-      let lineBuffer = '';
-
-      while (port.readable && keepReadingRef.current) {
-        const reader = port.readable.getReader();
-        readerRef.current = reader;
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            if (value) {
-              lineBuffer += decoder.decode(value, { stream: true });
-              const lines = lineBuffer.split('\n');
-              lineBuffer = lines.pop(); // keep partial line in buffer
-
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed) continue;
-                setSerialLogs(prev => [...prev.slice(-25), `[RX] ${trimmed}`]);
-
-                // Extract valid JSON packet
-                const startIdx = trimmed.indexOf('{');
-                const endIdx = trimmed.lastIndexOf('}');
-                if (startIdx !== -1 && endIdx > startIdx) {
-                  try {
-                    const jsonStr = trimmed.substring(startIdx, endIdx + 1);
-                    const data = JSON.parse(jsonStr);
-                    handleHardwareTelemetry(data);
-                  } catch (e) {
-                    // ignore corrupted chunk
-                  }
-                }
-              }
-            }
-          }
-        } catch (readErr) {
-          if (keepReadingRef.current) {
-            console.warn('Serial stream read stopped/unplugged:', readErr);
-          }
-          break;
-        } finally {
-          try {
-            reader.releaseLock();
-          } catch (e) {}
-          readerRef.current = null;
-        }
-      }
-
-      // If loop exited while we were reading, clean up
-      if (keepReadingRef.current) {
-        await handleDisconnectSerial(true);
-      }
-    } catch (err) {
-      console.error('Serial port error:', err);
-      await handleDisconnectSerial(false);
-
-      let userTip = err.message;
-      if (err.message && (err.message.includes('Failed to open') || err.name === 'NetworkError')) {
-        userTip = 'Port is busy or reconnecting. If Arduino IDE Serial Monitor is open, please close it (Ctrl+Shift+M), then click Connect again.';
-      } else if (err.name === 'NotFoundError' || err.message?.includes('No port selected')) {
-        userTip = 'No port was selected by user.';
-      }
-      setSerialToast({
-        type: 'error',
-        title: 'Serial Connection Notice',
-        message: userTip
-      });
-    }
-  }
-
-  function handleHardwareTelemetry(data) {
-    // Expected packet: {"id":"NODE-01","location":"Seam 3-A Longwall Face","tilt":0.00,"vibration":0.01,"freq":0.0,"mining_thresh":0.22,"crack":0.00,"ch4":0.00,"temp":24.5,"moisture":15.0,"status":"normal","timestamp":123}
-    
-    // Geotechnical rock strata propagation factors:
-    // ALL subterranean nodes link directly to the physical hardware MPU-6050 sensor stream!
-    const NODE_PROPAGATION = {
-      'NODE-01': { tiltMul: 1.00, vibMul: 1.00, crackMul: 1.00, tempOff: 0.0 },  // Extraction Face 3-A (Master Physical Node)
-      'NODE-02': { tiltMul: 0.88, vibMul: 0.85, crackMul: 0.82, tempOff: -0.8 }, // Main Intake Trunk
-      'NODE-03': { tiltMul: 1.08, vibMul: 0.98, crackMul: 1.04, tempOff: +1.2 }, // Central Pillar Cluster (Stress Concentration)
-      'NODE-04': { tiltMul: 0.78, vibMul: 0.75, crackMul: 0.72, tempOff: -1.4 }, // Ventilation Return Shaft
-      'NODE-05': { tiltMul: 0.82, vibMul: 0.80, crackMul: 0.79, tempOff: -0.5 }, // South Dip Gallery
-      'NODE-06': { tiltMul: 0.65, vibMul: 0.60, crackMul: 0.58, tempOff: -2.1 }, // Surface Datum Reference Monument
-    };
-
-    const baseTilt = typeof data.tilt === 'number' ? data.tilt : 0.0;
-    const basePitch = typeof data.pitch === 'number' ? data.pitch : (typeof data.tiltX === 'number' ? data.tiltX : baseTilt);
-    const baseRoll = typeof data.roll === 'number' ? data.roll : (typeof data.tiltY === 'number' ? data.tiltY : +(baseTilt * 0.5).toFixed(2));
-    const baseVib = typeof data.vibration === 'number' ? data.vibration : 0.01;
-    const baseCrack = typeof data.crack === 'number' ? data.crack : 0.0;
-    const rawTemp = typeof data.temp === 'number' ? data.temp : 28.5;
-    const baseTemp = +(rawTemp > 40 ? rawTemp - 19.5 : rawTemp).toFixed(1);
-    const baseMoisture = typeof data.moisture === 'number' ? data.moisture : null;
-    const baseCH4 = typeof data.ch4 === 'number' ? data.ch4 : null;
-    const baseCO = typeof data.co === 'number' ? data.co : null;
-
-    setNodes(prevNodes => prevNodes.map(n => {
-      const prop = NODE_PROPAGATION[n.id] || { tiltMul: 1.0, vibMul: 1.0, crackMul: 1.0, tempOff: 0 };
-      const nodePitch = +(basePitch * prop.tiltMul).toFixed(2);
-      const nodeRoll = +(baseRoll * prop.tiltMul).toFixed(2);
-      const nodeTilt = +(Math.sqrt(nodePitch * nodePitch + nodeRoll * nodeRoll)).toFixed(2);
-      const nodeVib = +(baseVib * prop.vibMul).toFixed(2);
-      const nodeCrack = +(baseCrack * prop.crackMul).toFixed(2);
-      const nodeTemp = +(baseTemp + prop.tempOff).toFixed(1);
-
-      const nodeStatus = (
-        nodeTilt >= DGMS_THRESHOLDS.TILT_CRITICAL || 
-        nodeCrack >= DGMS_THRESHOLDS.CRACK_CRITICAL || 
-        nodeVib >= DGMS_THRESHOLDS.VIBRATION_CRITICAL
-      ) ? 'critical' : (
-        nodeTilt >= DGMS_THRESHOLDS.TILT_ADVISORY || 
-        nodeCrack >= DGMS_THRESHOLDS.CRACK_ADVISORY || 
-        nodeVib >= DGMS_THRESHOLDS.VIBRATION_ADVISORY
-      ) ? 'advisory' : 'normal';
-
-      return {
-        ...n,
-        tiltX: nodePitch,
-        tiltY: nodeRoll,
-        vibrationG: nodeVib,
-        crackDisplacement: nodeCrack,
-        temperature: nodeTemp,
-        ...(baseMoisture !== null ? { moisture: +(baseMoisture).toFixed(1) } : {}),
-        ...(baseCH4 !== null ? { ch4: +(baseCH4).toFixed(2) } : {}),
-        ...(baseCO !== null ? { co: +(baseCO).toFixed(1) } : {}),
-        status: nodeStatus,
-        lastSeen: 'Live Hardware'
-      };
-    }));
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const tiltVal = +(data.tilt || 0).toFixed(2);
-    const vibVal = +(data.vibration || 0.01).toFixed(2);
-    const crackVal = +(data.crack || 0).toFixed(2);
-    const tempVal = +(data.temp > 40 ? data.temp - 19.5 : (data.temp || 28.5)).toFixed(1);
-    const freqVal = +(data.freq || 0).toFixed(1);
-    const ch4Val = +(data.ch4 || 0.22).toFixed(2);
-    const coVal = +(data.co || 6.5).toFixed(1);
-
-    setHistoryData(prev => [
-      ...prev.slice(1),
-      {
-        time: timeStr,
-        tilt: tiltVal,
-        vibration: vibVal,
-        crack: crackVal,
-        temp: tempVal,
-        freq: freqVal,
-        ch4: ch4Val,
-        co: coVal
-      }
-    ]);
-  }
 
   const [events, setEvents] = useState([
     {
@@ -465,7 +161,6 @@ export default function App() {
       if (!isSirenActive) {
         sirenEngine.startSiren();
         setIsSirenActive(true);
-        sendSerialCommand('BUZZ_ON');
         logEvent('critical', 'NODE-01', 'CRITICAL STRATA RUPTURE DETECTED - AUTOMATED EVACUATION ENGAGED');
       }
     } else {
@@ -473,7 +168,6 @@ export default function App() {
       if (isSirenActive) {
         sirenEngine.stopSiren();
         setIsSirenActive(false);
-        sendSerialCommand('BUZZ_OFF');
         logEvent('normal', 'SYS', 'Working strata stabilized - Emergency siren silenced automatically.');
       }
     }
@@ -494,9 +188,9 @@ export default function App() {
     setEvents(prev => [newEvt, ...prev.slice(0, 49)]);
   }
 
-  // Periodic subtle jitter / streaming data tick (ONLY active if user explicitly clicks "Test with Simulation", and sensor is not connected)
+  // Periodic subtle jitter / streaming data tick (Continuous Digital Twin stream)
   useEffect(() => {
-    if (serialConnected || !isSimStreamActive) return;
+    if (!isSimStreamActive) return;
 
     const interval = setInterval(() => {
       setHistoryData(prevHistory => {
@@ -518,20 +212,18 @@ export default function App() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [maxTilt, maxCrack, maxCH4, maxCO, serialConnected, isSimStreamActive]);
+  }, [maxTilt, maxCrack, maxCH4, maxCO, isSimStreamActive]);
 
-  // Siren toggle handler (Triggers both Browser Siren AND Physical ESP32 Hardware Buzzer)
+  // Siren toggle handler
   function handleToggleSiren() {
     if (isSirenActive) {
       sirenEngine.stopSiren();
       setIsSirenActive(false);
-      sendSerialCommand('BUZZ_OFF');
       logEvent('normal', 'OPERATOR', 'Emergency siren manually silenced by safety operator.');
     } else {
       sirenEngine.startSiren();
       setIsSirenActive(true);
-      sendSerialCommand('BUZZ_TEST');
-      logEvent('critical', 'OPERATOR', 'Manual acoustic siren test activated from command console (Physical Buzzer Triggered).');
+      logEvent('critical', 'OPERATOR', 'Manual acoustic siren test activated from command console.');
     }
   }
 
@@ -713,8 +405,6 @@ export default function App() {
         effect3DTheme={effect3DTheme}
         onSelect3DEffectTheme={setEffect3DTheme}
         onOpenCustomizer={() => setIsThemeCustomizerOpen(true)}
-        serialConnected={serialConnected}
-        onConnectSerial={handleConnectSerial}
         onNavigateHome={() => setActiveTab('overview')}
       />
 
@@ -822,19 +512,10 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-3">
-                {serialConnected ? (
-                  <span className="px-3.5 py-1.5 rounded-xl bg-cyan-950/90 border border-cyan-400 text-cyan-300 font-mono text-xs font-black flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping inline-block" />
-                    LIVE HARDWARE SYNC ACTIVE
-                  </span>
-                ) : (
-                  <button
-                    onClick={handleConnectSerial}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-mono text-xs font-black flex items-center gap-2 shadow-lg transition-all cursor-pointer"
-                  >
-                    <span>CONNECT HARDWARE GATEWAY</span>
-                  </button>
-                )}
+                <span className="px-3.5 py-1.5 rounded-xl bg-slate-950 border border-emerald-500/40 text-emerald-400 font-mono text-xs font-bold flex items-center gap-2 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                  REAL-TIME DIGITAL TWIN ACTIVE
+                </span>
               </div>
             </div>
             
@@ -864,7 +545,6 @@ export default function App() {
               <TelemetryPanels
                 historyData={historyData}
                 status={overallStatus}
-                serialConnected={serialConnected}
                 isSimStreamActive={isSimStreamActive}
                 onToggleSimStream={() => setIsSimStreamActive(prev => !prev)}
               />
@@ -877,10 +557,6 @@ export default function App() {
                   nodes={nodes}
                   onTriggerScenario={handleTriggerScenario}
                   onManualSliderChange={handleManualSliderChange}
-                  hardwareMode={hardwareMode}
-                  onToggleHardwareMode={setHardwareMode}
-                  serialConnected={serialConnected}
-                  onConnectSerial={handleConnectSerial}
                 />
               </div>
 
@@ -898,8 +574,6 @@ export default function App() {
             nodes={nodes}
             selectedNodeId={selectedNodeId}
             onSelectNodeId={setSelectedNodeId}
-            serialConnected={serialConnected}
-            hardwareMode={hardwareMode}
             maxTilt={maxTilt}
             maxCrack={maxCrack}
             maxVibration={maxVibration}
@@ -912,8 +586,6 @@ export default function App() {
           <SensorDeepDiveHub
             selectedNode={activeSelectedNode}
             allNodes={nodes}
-            serialConnected={serialConnected}
-            hardwareMode={hardwareMode}
             onSelectNodeId={setSelectedNodeId}
             onBackToOverview={() => setActiveTab('overview')}
           />
@@ -943,8 +615,6 @@ export default function App() {
             nodes={nodes}
             selectedNodeId={selectedNodeId}
             onSelectNodeId={setSelectedNodeId}
-            serialConnected={serialConnected}
-            hardwareMode={hardwareMode}
             onInjectTremor={handleInjectTremor}
           />
         )}
@@ -976,8 +646,6 @@ export default function App() {
             allNodes={nodes}
             selectedNodeId={selectedNodeId}
             onSelectNodeId={setSelectedNodeId}
-            serialConnected={serialConnected}
-            hardwareMode={hardwareMode}
             effect3DTheme={effect3DTheme}
           />
         )}
@@ -1010,12 +678,9 @@ export default function App() {
           <InnovationSection />
         )}
 
-        {/* TAB 11: SETTINGS & HARDWARE BRIDGE (OWNER / ADMIN EXCLUSIVE) */}
+        {/* TAB 11: SETTINGS & DGMS SAFETY CONSOLE (OWNER / ADMIN EXCLUSIVE) */}
         {activeTab === 'settings' && isAdmin && (
           <SettingsSection 
-            serialConnected={serialConnected}
-            onConnectSerial={handleConnectSerial}
-            serialLogs={serialLogs}
             thresholds={thresholds}
             onUpdateThresholds={(newThresh) => {
               setThresholds(newThresh);

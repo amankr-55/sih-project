@@ -38,33 +38,11 @@ export default function SimulationControls({
           </div>
         </div>
 
-        {/* Source Mode Toggle: Simulation vs Hardware Bridge */}
-        <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-          <button
-            onClick={() => onToggleHardwareMode('simulation')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all ${
-              hardwareMode === 'simulation'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
+        <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
+          <span className="flex items-center gap-1.5 text-purple-400 font-bold">
             <Cpu className="w-3.5 h-3.5" />
-            <span>Sand-Tray Sim</span>
-          </button>
-          <button
-            onClick={() => {
-              onToggleHardwareMode('hardware');
-              if (!serialConnected && onConnectSerial) onConnectSerial();
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              hardwareMode === 'hardware'
-                ? 'bg-cyan-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Usb className={`w-3.5 h-3.5 ${serialConnected ? 'text-emerald-400 animate-pulse' : 'text-cyan-400'}`} />
-            <span>{serialConnected ? 'Hardware Live' : 'Connect Hardware Port'}</span>
-          </button>
+            <span>Digital Twin Strata Engine</span>
+          </span>
         </div>
       </div>
 
