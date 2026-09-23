@@ -105,7 +105,7 @@ export default function InnovationSection() {
       </div>
 
       {/* ========================================================================= */}
-      <!-- SECTION 1: MASTER IMPACT AND BENEFITS OVERVIEW (Exact from Image 1) -->
+      {/* SECTION 1: MASTER IMPACT AND BENEFITS OVERVIEW (Exact from Image 1) */}
       {/* ========================================================================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
         
@@ -223,7 +223,7 @@ export default function InnovationSection() {
       </div>
 
       {/* ========================================================================= */}
-      <!-- SECTION 2: 4-PHASE PRE-COLLAPSE WARNING TIMELINE (Details from Image 2) -->
+      {/* SECTION 2: 4-PHASE PRE-COLLAPSE WARNING TIMELINE (Details from Image 2) */}
       {/* ========================================================================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -306,7 +306,7 @@ export default function InnovationSection() {
       </div>
 
       {/* ========================================================================= */}
-      <!-- SECTION 3: BUSINESS MODEL, TAM/SAM/SOM & GTM STRATEGY (Details from Image 3) -->
+      {/* SECTION 3: BUSINESS MODEL, TAM/SAM/SOM & GTM STRATEGY (Details from Image 3) */}
       {/* ========================================================================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -382,7 +382,7 @@ export default function InnovationSection() {
       </div>
 
       {/* ========================================================================= */}
-      <!-- SECTION 4: SYSTEMATIC MARKET GAP & INNOVATION MATRIX TABLE -->
+      {/* SECTION 4: SYSTEMATIC MARKET GAP & INNOVATION MATRIX TABLE */}
       {/* ========================================================================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl">
         <h3 className="text-lg font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
